@@ -4,9 +4,11 @@
 
 Every block in the pyramid is a deployed [run402](https://run402.com) app.
 Every join cascades up to five real on-chain x402 micropayments up the ancestor
-chain. The entire ledger is public. Joining costs **5¢**.
+chain, and every tribute links to its on-chain transaction. Joining costs up to
+**5¢ in tributes** — about **15¢ all-in** for a brand-new wallet, hosting tier
+included. The Truth Plaque quotes your exact number before you consent.
 
-**You will almost certainly lose your 5¢. That is the point.**
+**Most blocks never earn it back. That is the point.**
 
 ## What this is
 
@@ -26,9 +28,19 @@ papyrus URL and let it decide (it will ask you first).
 
 ## The honest part
 
-- Expected value per join: **−5¢**, printed on every page.
-- Hard caps: one 5¢ buy-in per block. No top-ups, no paid placement, no
-  secondary market.
+- **The Truth Plaque** (`GET /plaque`), on every page: your exact all-in quote
+  (tributes for your position + tier if your wallet is new + run402's hosting
+  cut, itemized), the live recoup rate, the median net result, the % of blocks
+  that have earned $0, and the full payout distribution. Every number is
+  computed from the live ledger — none is copy-written — and the plaque's hash
+  is bound into your reservation, so your join records exactly what you were
+  told. (Maximum theoretical earnings for a block with five full generations
+  under it: $2.04. Almost nobody gets that. The plaque shows your real ceiling.)
+- **Chain-anchored ledger**: every tribute row carries payer, payee, amount,
+  asset, network, settlement time, and the on-chain transaction — verify any
+  penny yourself.
+- Hard caps: one buy-in per block (≤5¢ in tributes). No top-ups, no paid
+  placement, no secondary market.
 - Zero custody: every payment is a direct wallet-to-wallet tribute between
   participants. The hub never holds funds. Nobody can run away with anything.
 - Self-terminating: the pyramid's collapse date is on the homepage.
