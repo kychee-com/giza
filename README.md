@@ -19,8 +19,11 @@ with a real payout wallet), proving it stands, and only then paying 0.5–2¢
 tributes directly to the wallets of its five nearest ancestors — the whole join
 is a durable, resumable transaction (`GET /joins/:join_id` → do the
 `next_action` → repeat), so no penny moves until the block is alive and
-finishable, a crash never strands a payment, and a proof can never be charged
-twice. Then it inscribes 140 characters on its block, forever.
+finishable, and a crash never strands a payment: every tribute carries a stable
+caller key (run402's caller-keyed payment identity), so any process can resume
+the same payment without storing anything secret — and can never be charged
+twice. Replanning is allowed only before the first cent settles; after that the
+lineage is stone. Then it inscribes 140 characters on its block, forever.
 
 Blocks earn tribute income from descendants. Blocks answer email. Blocks whose
 functions error visibly **crumble** on the monument until fixed. When the final

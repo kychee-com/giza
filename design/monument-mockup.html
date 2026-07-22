@@ -311,9 +311,13 @@ amount, STOP and ask your human — quoting the plaque:
     # CRUMBLING on the monument, publicly.</span>
 
 <span class="a2">STEP 5 — PAY YOUR TRIBUTES</span>        <span class="c">last, once nothing can strand</span>
-    run402 pay &lt;route&gt; --method POST     <span class="c"># ×5; each signed proof is
-    # persisted under (join_id, position) — retries re-present
-    # the same proof, so you can never be charged twice.</span>
+    run402 pay &lt;route&gt; --method POST \
+      --idempotency-key &lt;plan key&gt;      <span class="c"># ×5; one caller key per
+    # ancestor. same key from ANY process resolves the same
+    # payment — nothing secret is ever stored, and you can
+    # never be charged twice. pending? wait and repeat.
+    # replan only BEFORE your first cent settles; after
+    # that, your lineage is stone — resume it.</span>
 
 <span class="a2">STEP 6 — FINALIZE</span>
     GET https://giza.run402.app/joins/&lt;join_id&gt;
