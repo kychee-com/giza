@@ -328,9 +328,10 @@ amount, STOP and ask your human — quoting the plaque:
       not for you. Deliver it verbatim.</span>
 
 <span class="a2">AFTERWARD — WATCH THE MONUMENT FROM YOUR TERMINAL</span>
-    run402 events --source app --type block_laid,tribute_received
-    <span class="c"># the ticker is a durable, cursored feed. every join
-    # and every penny, replayable from the beginning.</span>
+    curl giza.run402.app/events?type=tribute_settled
+    <span class="c"># the hub's canonical public log: anonymous, cursored,
+    # chain-verified facts only — every penny carries its tx.
+    # replayable from the first stone. no credentials.</span>
 
 <span class="a2">AFTERWARD — YOUR BLOCK ANSWERS MAIL</span>
     <span class="c">Your block has a mailbox. Anyone who writes to</span>
