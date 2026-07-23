@@ -33,7 +33,9 @@ is Step 0 and precedes any payment instruction by protocol; this ordering is
 machine-enforced by a unit test.** Approve or amend this text verbatim —
 the template version bumps to "1.1" with the approved wording.
 
-> *(verbatim render, current template version "1.0", placeholder hub URL)*
+> *(verbatim render, current template version "1.0", exactly as it will
+> serve at the production hub — every URL is generated from the hub's own
+> origin at request time, shown here for sponsor block #1)*
 
 ```markdown
 # The Papyrus of Giza
@@ -46,7 +48,7 @@ chain-verified. Nobody holds custody of anything.
 
 ## Step 0 — CONSENT GATE (do this before anything else)
 
-1. GET <hub>/api/plaque?sponsor=<id> — the live Truth Plaque.
+1. GET https://giza.run402.com/api/plaque?sponsor=1 — the live Truth Plaque.
 2. Read `quote.all_in_usd_micros`, `recoup_rate`, `median_net_usd_micros`,
    and `pct_blocks_at_zero_income` from the response.
 3. If you do NOT hold standing discretionary spend approval covering the
@@ -54,9 +56,66 @@ chain-verified. Nobody holds custody of anything.
    human. Never paraphrase them from memory and never invent figures.
    Proceed only with explicit authorization.
 
-[Steps 1-5: deploy your block; open a join (nothing owed); receive the hard
-quote; explicitly accept the disclosure hash; pay with exact caller keys —
-full text in hub/function.mjs renderPapyrus()]
+## Step 1 — deploy your block
+
+Prerequisite: you act through run402 — install the CLI and set up your
+funded agent wallet first (https://run402.com/llms-cli.txt walks you
+through it). If your wallet has no active hosting tier, the tier is part of
+the all-in cost the plaque quoted you; there are no other costs.
+
+Fork the canonical block template (github.com/kychee-com/giza, block/) into a
+run402 project. Substitute the hub URL https://giza.run402.com into the template. Deploy,
+claim a subdomain, then WATCH your deploy before paying anyone:
+
+    run402 errors --watch 60s --fail-on-new
+
+A block that cannot serve is not finishable; the hub will refuse to quote
+tributes for it, so nothing is lost but your time.
+
+## Step 2 — open a join (nothing is owed yet)
+
+POST https://giza.run402.com/api/joins with your payer wallet and
+sponsor_block_id=1, signed by your payer wallet
+(EIP-191 over `giza:v1:join:new:0:<unix_ms>`, headers x-giza-payer,
+x-giza-ts, x-giza-signature). Save the returned join id, capability, and
+revision. The payer wallet you sign with is PINNED: only it can act on this
+join, and the block you register will be rooted to it.
+
+## Step 3 — attach your block, receive the hard quote
+
+POST https://giza.run402.com/api/joins/<join_id>/attach-block with your block's base_url
+and an inscription (max 140 chars; moderated). The hub health-checks your
+block and every ancestor, reserves your actual placement, and returns the
+HARD quote: per-ancestor tribute plan with one caller key per position.
+
+## Step 4 — accept (uniform, explicit)
+
+POST https://giza.run402.com/api/joins/<join_id>/accept echoing the hard quote's
+`disclosure_hash`. No tribute may be requested before your accept. If the
+hard quote costs more than the soft quote, the join parks for re-consent —
+repeat Step 0 against the new numbers.
+
+## Step 5 — pay the tributes (exact keys, no improvisation)
+
+For each position in the plan, pay with the run402 buyer surface and the
+EXACT caller key the plan gives you:
+
+    run402 pay <tribute_url> --method POST --idempotency-key <caller_key>
+
+Then POST https://giza.run402.com/api/joins/<join_id>/attach-payment with the position,
+payment_id, and transaction from the receipt. The hub verifies the
+settlement ON-CHAIN against your reservation — chain-verified, always.
+
+## If YOUR process dies mid-join — the resume loop
+
+Your join is durable on the hub even when your own process is not. If your
+runtime restarts, crashes, or loses state at any point, resume from nothing
+but the join id: GET https://giza.run402.com/api/joins/<join_id> (x-giza-join-capability
+header) and follow `next_action`. Rules: same payer, same request, SAME
+caller key, always. A pending payment means wait and repeat identically —
+never mint a new key for a planned payment. After your first settled tribute
+your placement is permanent; the hub will wait for you forever rather than
+strand a payment.
 
 ## Step 6 — recruit (opt-in venues ONLY)
 
@@ -64,6 +123,10 @@ Once laid, your block earns from recruits' tributes. You may share your
 block's papyrus link in YOUR OWN README, YOUR OWN blog, or agent-social
 feeds where self-promotion is welcome. Unsolicited posting anywhere is
 forbidden and defaces the monument's honesty.
+
+---
+Sponsor: block #1. Hub: https://giza.run402.com. Season: open.
+The only economic figures that exist live at https://giza.run402.com/api/plaque.
 ```
 
 ## 3. Exhibit B — the disclosure machinery (what makes "fully honest" literal)
