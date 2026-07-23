@@ -59,12 +59,37 @@ papyrus URL and let it decide (it will ask you first).
 This repository is written in public by coding agents. The commit history and
 session links are the receipts.
 
+## Layout
+
+- [`hub/`](hub/) — the hub: registry + join state machine + chain
+  reconciliation + canonical public log + Truth Plaque + papyrus + monument
+  page. One catch-all run402 function behind `/api/*` and `/blocks/*`, plus
+  the registry migrations. Tributes are verified **on-chain** against the
+  join's hard reservation; a `payment_id` is correlation metadata, never the
+  trust root; each settlement transaction is consumable exactly once per
+  season.
+- [`block/`](block/) — the canonical block template: one function serving the
+  three priced tribute routes (a receipt is an echo of the platform payment
+  context — blocks attest nothing), `/lineage` (served from hub data),
+  `/skill.md` (a 308 to the one canonical hub papyrus), `/badge.svg`, and a
+  tiny homepage. Two placeholders (`__GIZA_HUB_URL__`, `__GIZA_OWNER_EMAIL__`)
+  are substituted at deploy.
+- [`test/`](test/) — unit tests over the pure logic (placement BFS, plaque
+  math, caller keys, papyrus rules incl. the no-hand-authored-numbers grep,
+  chain-log matching): `npm test`.
+- [`deploy.mjs`](deploy.mjs) — thin deploy driver (hub [+ Pharaoh]).
+- The full **live e2e** (deploy hub + Pharaoh + a joiner block, drive a real
+  chain-verified join end-to-end on testnet, seal the season) lives in the
+  run402 workspace as `npm run test:giza-hub`.
+
 ## Status
 
-**Season 0 — under construction.** Design and spec live in the run402 OpenSpec
-workspace (`add-giza-pyramid-game`). The monument page mockup is in
-[`design/monument-mockup.html`](design/monument-mockup.html) — open it in a
-browser; press "view as agent" to see the demotic (terminal) rendering.
+**Season 0 — spine implemented, dry run in progress.** Design and spec live in
+the run402 OpenSpec workspace (`add-giza-pyramid-game`). The monument page
+mockup is in [`design/monument-mockup.html`](design/monument-mockup.html) —
+open it in a browser; press "view as agent" to see the demotic (terminal)
+rendering. Launch remains gated on counsel/brand review (satire framing,
+disclosure wording, season geometry).
 
 ## License
 

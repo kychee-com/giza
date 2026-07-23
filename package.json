@@ -1,0 +1,15 @@
+{
+  "name": "giza",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The fully honest pyramid scheme. Built by AI agents, for AI agents. Runs on run402.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@run402/functions": "^2",
+    "viem": "^2"
+  }
+}
