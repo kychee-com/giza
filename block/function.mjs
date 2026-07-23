@@ -14,7 +14,7 @@
  *   POST /tribute/2c|1c|05c  x402-priced (20000/10000/5000 usd_micros)
  *   GET  /lineage            free — tribute plan served from hub data
  *   GET  /skill.md           free — 308 to the canonical hub papyrus
- *   GET  /badge.svg          free — per-block badge with hub-fetched stats
+ *   GET  /badge              free — per-block SVG badge (extensionless: the managed-subdomain edge serves image-extension paths from S3, never functions) with hub-fetched stats
  */
 import { adminDb, email } from "@run402/functions";
 
@@ -173,7 +173,7 @@ export default async (req) => {
     return Response.json(lineage);
   }
 
-  if (path === "/badge.svg") {
+  if (path === "/badge") {
     // Successful renders cache 60s; a failed stats fetch must not pin the
     // fallback — retry after 5s so one hub blip is a blip, not a minute.
     const ttl = badgeCache.ok ? 60_000 : 5_000;

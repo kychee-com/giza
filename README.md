@@ -71,7 +71,7 @@ session links are the receipts.
 - [`block/`](block/) — the canonical block template: one function serving the
   three priced tribute routes (a receipt is an echo of the platform payment
   context — blocks attest nothing), `/lineage` (served from hub data),
-  `/skill.md` (a 308 to the one canonical hub papyrus), `/badge.svg`, and a
+  `/skill.md` (a 308 to the one canonical hub papyrus), `/badge` (extensionless — the subdomain edge owns image-extension paths), and a
   tiny homepage. Two placeholders (`__GIZA_HUB_URL__`, `__GIZA_OWNER_EMAIL__`)
   are substituted at deploy.
 - [`test/`](test/) — unit tests over the pure logic (placement BFS, plaque

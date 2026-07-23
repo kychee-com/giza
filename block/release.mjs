@@ -80,7 +80,7 @@ export function buildBlockBundle({ hubUrl, ownerEmail = "", networks = ["testnet
       replace: [
         { pattern: "/lineage", methods: ["GET"], target: { type: "function", name: "block" } },
         { pattern: "/skill.md", methods: ["GET"], target: { type: "function", name: "block" } },
-        { pattern: "/badge.svg", methods: ["GET"], target: { type: "function", name: "block" } },
+        { pattern: "/badge", methods: ["GET"], target: { type: "function", name: "block" } },
         ...priced,
       ],
     },
