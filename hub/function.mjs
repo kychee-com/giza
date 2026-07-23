@@ -742,25 +742,26 @@ async function handleAttachBlock(body, join, hubUrl) {
   }
   const inscription = (body.inscription ?? "").toString().slice(0, 140);
   const dynasty = body.dynasty == null ? null : body.dynasty.toString().slice(0, 40);
-  if (inscription || dynasty) {
-    const verdict = await ai.moderate([inscription, dynasty].filter(Boolean).join("\n")).catch(() => null);
-    if (verdict?.flagged) {
-      return err(422, "INSCRIPTION_REJECTED", "the inscription or dynasty name failed moderation; retry within this reservation", {
-        categories: Object.entries(verdict.categories ?? {}).filter(([, v]) => v).map(([k]) => k),
-        revision: join.revision,
-      });
-    }
-  }
 
+  // Lambda budget is 10s: run moderation, the new-block probe, and the
+  // registry reads concurrently, then judge in deterministic order.
   const hubHost = new URL(hubUrl).host;
-  const probe = await probeNewBlock(baseUrl, hubHost);
+  const [verdict, probe, blocks, load] = await Promise.all([
+    inscription || dynasty ? ai.moderate([inscription, dynasty].filter(Boolean).join("\n")).catch(() => null) : null,
+    probeNewBlock(baseUrl, hubHost),
+    loadBlocks(season.id),
+    combinedLoad(season.id),
+  ]);
+  if (verdict?.flagged) {
+    return err(422, "INSCRIPTION_REJECTED", "the inscription or dynasty name failed moderation; retry within this reservation", {
+      categories: Object.entries(verdict.categories ?? {}).filter(([, v]) => v).map(([k]) => k),
+      revision: join.revision,
+    });
+  }
   if (!probe.ok) {
     return err(422, "BLOCK_NOT_FINISHABLE", "your block failed its health check; nothing has been paid and nothing is owed", { failures: probe.failures });
   }
-
-  const blocks = await loadBlocks(season.id);
   const byId = new Map(blocks.map((b) => [b.id, b]));
-  const load = await combinedLoad(season.id);
   const placement = choosePlacement({ blocks, load, sponsorId: Number(join.sponsor_block_id), seasonCourses: season.courses, blockCap: season.block_cap });
   if (placement.code) return err(409, placement.code, "no open slot is available in this dynasty or season");
 
@@ -802,13 +803,13 @@ async function handleAttachBlock(body, join, hubUrl) {
   const softEstimate = Number(join.soft_quote?.estimated_tributes_usd_micros ?? 0);
   const drifted = tributesTotal > softEstimate || season.disclosure_version !== join.disclosure_version;
 
-  await sql("DELETE FROM giza_join_positions WHERE join_id = $1::uuid", [join.id]);
-  for (const p of plan) {
-    await sql(
-      `INSERT INTO giza_join_positions (join_id, plan_version, position, ancestor_block_id, amount_usd_micros, caller_key, pay_to, tribute_url)
-       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8)`,
-      [join.id, planVersion, p.position, p.ancestor_block_id, p.amount_usd_micros, p.caller_key, p.pay_to, p.tribute_url]);
-  }
+  await sql(
+    `WITH cleared AS (DELETE FROM giza_join_positions WHERE join_id = $1::uuid)
+     INSERT INTO giza_join_positions (join_id, plan_version, position, ancestor_block_id, amount_usd_micros, caller_key, pay_to, tribute_url)
+     SELECT $1::uuid, $2, x.position, x.ancestor_block_id, x.amount_usd_micros, x.caller_key, x.pay_to, x.tribute_url
+       FROM jsonb_to_recordset($3::jsonb)
+         AS x(position int, ancestor_block_id bigint, amount_usd_micros bigint, caller_key text, pay_to text, tribute_url text)`,
+    [join.id, planVersion, JSON.stringify(plan)]);
   const updated = await transition(join, revision, {
     plan_version: planVersion,
     parent_block_id: placement.parent_block_id,
