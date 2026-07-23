@@ -136,7 +136,11 @@ export function computePlaque({ blocks, ledger, season, parentBlockId = null, wa
   const income = new Map();
   const spentByJoin = new Map();
   for (const row of ledger) {
-    if (row.block_id != null) income.set(row.block_id, (income.get(row.block_id) ?? 0) + Number(row.amount_usd_micros));
+    // Ledger rows may arrive straight off the SQL bridge with BIGINT
+    // block_id as a string — normalize or every income lookup misses and
+    // the plaque reports universal zero income (run-8 live finding).
+    const blockId = row.block_id == null ? null : Number(row.block_id);
+    if (blockId != null) income.set(blockId, (income.get(blockId) ?? 0) + Number(row.amount_usd_micros));
     if (row.join_id) spentByJoin.set(row.join_id, (spentByJoin.get(row.join_id) ?? 0) + Number(row.amount_usd_micros));
   }
   const paidBlocks = blocks.filter((b) => b.join_id && spentByJoin.has(b.join_id));

@@ -158,6 +158,19 @@ test("plaque: recoup / median / zero stats derive from the ledger", () => {
   assert.equal(plaque.payout_distribution.c2_to_5c, 1);
 });
 
+test("plaque: SQL-bridge string block_ids still land income on the right blocks", () => {
+  const season = { id: 1, state: "open", courses: 9, block_cap: 500, disclosure_version: 1 };
+  // exactly what the admin SQL endpoint returns: BIGINT columns as strings
+  const ledger = [
+    { block_id: "1", join_id: "join-2", amount_usd_micros: "20000" },
+    { block_id: "2", join_id: "join-5", amount_usd_micros: "20000" },
+  ];
+  const blocks = FIXTURE.filter((b) => [1, 2, 5].includes(b.id));
+  const plaque = computePlaque({ blocks, ledger, season });
+  assert.equal(plaque.recoup_rate, 0.5, "block 2 spent 20000 and earned 20000 — recouped despite string ids");
+  assert.equal(plaque.pct_blocks_at_zero_income, 0.5);
+});
+
 test("papyrus: consent gate precedes the first tribute instruction (spec scenario)", () => {
   const md = renderPapyrus({ hubUrl: "https://giza.example", sponsorBlockId: 7, seasonState: "open", generatedAt: "2026-07-23T00:00:00Z", disclosureVersion: 1 });
   const consentAt = md.indexOf("CONSENT GATE");
