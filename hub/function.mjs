@@ -1230,6 +1230,8 @@ export default async (req) => {
     return err(404, "NOT_FOUND", "unknown hub route");
   } catch (error) {
     console.error("hub error", path, error);
-    return err(500, "HUB_ERROR", "the hub hit an unexpected error; the monument stands, retry shortly");
+    return err(500, "HUB_ERROR", "the hub hit an unexpected error; the monument stands, retry shortly", {
+      detail: String(error?.message ?? error).slice(0, 300),
+    });
   }
 };
