@@ -242,10 +242,20 @@ test("block bundle: canonical priced routes + substituted placeholders", () => {
   assert.ok(bundle.functions[0].code.includes("o@example.com"));
 });
 
-test("hub bundle: catch-all routes, viem dep, network substituted", () => {
-  const bundle = buildHubBundle({ network: "testnet" });
+test("hub bundle: catch-all routes, viem dep, network + admin hash substituted", () => {
+  const hash = "ab".repeat(32);
+  const bundle = buildHubBundle({ network: "testnet", adminSecretHash: hash });
   assert.deepEqual(bundle.routes.replace.map((r) => r.pattern).sort(), ["/api/*", "/blocks/*"]);
   assert.ok(bundle.routes.replace.every((r) => !r.pricing), "hub routes are free — the hub never holds or receives funds");
   assert.deepEqual(bundle.functions[0].deps, ["viem"]);
-  assert.ok(!bundle.functions[0].code.includes('"__GIZA_NETWORK__"') || bundle.functions[0].code.includes('"testnet"'));
+  assert.ok(!bundle.functions[0].code.includes("__GIZA_NETWORK__"));
+  assert.ok(bundle.functions[0].code.includes(hash), "admin secret hash is baked in");
+  assert.ok(!bundle.functions[0].code.includes("__GIZA_ADMIN_SECRET_HASH__"));
+});
+
+test("hub bundle without an admin hash deploys fail-closed", () => {
+  const bundle = buildHubBundle({ network: "testnet" });
+  assert.ok(bundle.functions[0].code.includes("__GIZA_DISABLED__"), "admin routes deny everything when no hash was provided");
+  const malformed = buildHubBundle({ network: "testnet", adminSecretHash: "not-a-hash" });
+  assert.ok(malformed.functions[0].code.includes("__GIZA_DISABLED__"), "a malformed hash also fails closed");
 });

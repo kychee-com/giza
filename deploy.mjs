@@ -67,18 +67,22 @@ if (create.status !== 201 && create.status !== 200) {
   process.exit(1);
 }
 const { project_id, service_key } = create.body;
+const { randomBytes, createHash } = await import("node:crypto");
+const adminSecret = randomBytes(24).toString("hex");
+const adminSecretHash = createHash("sha256").update(adminSecret).digest("hex");
 const deployed = await applyBundleV1({
   baseUrl: BASE_URL,
   serviceKey: service_key,
   siwxHeaders: siwx,
-  body: { project_id, ...buildHubBundle({ network: NETWORK }) },
+  body: { project_id, ...buildHubBundle({ network: NETWORK, adminSecretHash }) },
   operationTimeoutMs: 300_000,
 });
 console.log("hub release:", deployed.status, deployed.release_id);
 const claim = await api("POST", "/subdomains/v1", { name: SUBDOMAIN, deployment_id: deployed.deployment_id },
   { authorization: `Bearer ${service_key}` });
 console.log("subdomain:", claim.status, `https://${SUBDOMAIN}.run402.com`);
-console.log("hub service key (KEEP SAFE — it is the Giza admin credential):", service_key);
+console.log("hub project service key (platform credential, KEEP SAFE):", service_key);
+console.log("GIZA ADMIN SECRET (shown ONCE — Bearer for /api/admin/*; rotate by redeploy):", adminSecret);
 
 if (process.argv.includes("--with-pharaoh")) {
   const hubUrl = `https://${SUBDOMAIN}.run402.com`;
@@ -95,7 +99,7 @@ if (process.argv.includes("--with-pharaoh")) {
     { authorization: `Bearer ${createP.body.service_key}` });
   const reg = await fetch(`${hubUrl}/api/admin/pharaoh`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${service_key}` },
+    headers: { "content-type": "application/json", authorization: `Bearer ${adminSecret}` },
     body: JSON.stringify({ base_url: `https://${sub}.run402.com`, payout_wallet: account.address, owner_wallet: account.address }),
   });
   console.log("pharaoh registered:", reg.status, await reg.json().catch(() => null));

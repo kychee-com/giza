@@ -11,10 +11,13 @@ import { hubSiteHtml } from "./site.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-/** @param {{network?: "testnet"|"mainnet"}} opts */
-export function buildHubBundle({ network = "testnet" } = {}) {
+/** @param {{network?: "testnet"|"mainnet", adminSecretHash?: string}} opts
+ *  `adminSecretHash` = sha256 hex of the operator-held admin secret; omit to
+ *  deploy with ALL admin routes disabled (fail closed). */
+export function buildHubBundle({ network = "testnet", adminSecretHash = "" } = {}) {
   const code = readFileSync(join(here, "function.mjs"), "utf8")
-    .replaceAll("__GIZA_NETWORK__", network);
+    .replaceAll("__GIZA_NETWORK__", network)
+    .replaceAll("__GIZA_ADMIN_SECRET_HASH__", /^[0-9a-f]{64}$/.test(adminSecretHash) ? adminSecretHash : "__GIZA_DISABLED__");
   return {
     files: [{ file: "index.html", data: hubSiteHtml() }],
     functions: [{ name: "hub", code, deps: ["viem"] }],

@@ -369,12 +369,20 @@ async function verifyPayerSignature(req, op, joinId, revision, expectedPayer) {
   return valid ? { ok: true, payer: payer.toLowerCase() } : { ok: false, reason: "signature does not verify" };
 }
 
+// Deploy-time-baked admin credential: the DEPLOYER generates a secret and
+// bakes only its sha256 here. An unsubstituted placeholder denies everything
+// (fail closed). NOTE: the function-env RUN402_SERVICE_KEY is NOT
+// byte-comparable to the service key project-create returns (different
+// mintings of equivalent authority), so bearer-vs-env comparison is unusable.
+const ADMIN_SECRET_HASH = "__GIZA_ADMIN_SECRET_HASH__";
+
 function adminAuthorized(req) {
   const header = req.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  const expected = process.env.RUN402_SERVICE_KEY ?? "";
-  if (!token || !expected || token.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  if (!token || ADMIN_SECRET_HASH.startsWith("__GIZA_")) return false;
+  const presented = Buffer.from(sha256Hex(token));
+  const expected = Buffer.from(ADMIN_SECRET_HASH);
+  return presented.length === expected.length && timingSafeEqual(presented, expected);
 }
 
 async function loadSeason() {
@@ -716,10 +724,9 @@ async function handleSoftQuote(req, hubUrl) {
   return ok({ ...view, capability, disclosure: { version: season.disclosure_version, plaque_url: `${hubUrl}/api/plaque?sponsor=${sponsorId}` } }, { status: 201 });
 }
 
-async function handleAttachBlock(req, join, hubUrl) {
+async function handleAttachBlock(body, join, hubUrl) {
   const season = await loadSeason();
   if (season.state === "sealed") return err(410, "SEASON_SEALED", "the season is sealed");
-  const body = await req.json().catch(() => ({}));
   const revision = Number(body.revision);
   if (revision !== join.revision) return staleRevision(join);
   if (!["quoted", "block_attached", "health_checked"].includes(join.state)) {
@@ -819,10 +826,9 @@ async function handleAttachBlock(req, join, hubUrl) {
   return ok({ ...view, reconsent_required: drifted });
 }
 
-async function handleAccept(req, join, hubUrl) {
+async function handleAccept(body, join, hubUrl) {
   const season = await loadSeason();
   if (season.state === "sealed") return err(410, "SEASON_SEALED", "the season is sealed");
-  const body = await req.json().catch(() => ({}));
   if (Number(body.revision) !== join.revision) return staleRevision(join);
   if (!["reserved", "halted_reconsent"].includes(join.state)) {
     return err(409, "JOIN_NOT_ACCEPTABLE", `accept is not valid in state ${join.state}`, { state: join.state });
@@ -839,8 +845,7 @@ async function handleAccept(req, join, hubUrl) {
   return ok(await joinView(updated, hubUrl));
 }
 
-async function handleAttachPayment(req, join, hubUrl) {
-  const body = await req.json().catch(() => ({}));
+async function handleAttachPayment(body, join, hubUrl) {
   if (Number(body.revision) !== join.revision) return staleRevision(join);
   if (!["accepted", "paying", "reconciling"].includes(join.state)) {
     return err(409, "JOIN_NOT_PAYABLE", `attach-payment is not valid in state ${join.state}`, { state: join.state });
@@ -1047,16 +1052,17 @@ export default async (req) => {
       if (!join) return err(404, "JOIN_NOT_FOUND", "no such join");
       join = await applyLazyExpiry(join);
       const op = m[2];
-      const bodyClone = req.clone();
-      const peek = await bodyClone.json().catch(() => ({}));
-      const auth = await verifyPayerSignature(req, op, join.id, Number(peek.revision ?? -1), join.payer_wallet);
+      // Read the body exactly once — the routed runtime's Request does not
+      // support clone() (probe-verified) — and pass it to the handler.
+      const body = await req.json().catch(() => ({}));
+      const auth = await verifyPayerSignature(req, op, join.id, Number(body.revision ?? -1), join.payer_wallet);
       if (!auth.ok) return err(401, "PAYER_SIGNATURE_INVALID", auth.reason, { pinned_payer: join.payer_wallet });
       if (join.state === "expired") return err(410, "JOIN_EXPIRED", "the join expired before any settlement; open a fresh join");
-      if (op === "attach-block") return handleAttachBlock(req, join, hubUrl);
-      if (op === "accept") return handleAccept(req, join, hubUrl);
-      if (op === "attach-payment") return handleAttachPayment(req, join, hubUrl);
-      if (op === "renew") return handleRenew(join, hubUrl, peek.revision);
-      if (op === "cancel") return handleCancel(join, hubUrl, peek.revision);
+      if (op === "attach-block") return handleAttachBlock(body, join, hubUrl);
+      if (op === "accept") return handleAccept(body, join, hubUrl);
+      if (op === "attach-payment") return handleAttachPayment(body, join, hubUrl);
+      if (op === "renew") return handleRenew(join, hubUrl, body.revision);
+      if (op === "cancel") return handleCancel(join, hubUrl, body.revision);
     }
 
     if (path === "/api/plaque" && method === "GET") {
