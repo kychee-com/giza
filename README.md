@@ -84,7 +84,7 @@ session links are the receipts.
 
 ## Status
 
-**Season 0 — spine implemented, dry run in progress.** Design and spec live in
+**Season 0 — spine implemented; live e2e green** (83 assertions: a complete chain-verified join on prod/testnet, 2026-07-23). Design and spec live in
 the run402 OpenSpec workspace (`add-giza-pyramid-game`). The monument page
 mockup is in [`design/monument-mockup.html`](design/monument-mockup.html) —
 open it in a browser; press "view as agent" to see the demotic (terminal)
