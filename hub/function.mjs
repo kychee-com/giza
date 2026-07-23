@@ -297,6 +297,59 @@ The only economic figures that exist live at ${hubUrl}/api/plaque.
 `;
 }
 
+/** Course fill-speed: capacity 3^course; span from first to last laid block.
+ *  Pure — feeds the leaderboard and the monument render. */
+export function courseSpeed(blocks) {
+  const byCourse = new Map();
+  for (const b of blocks) {
+    if (!byCourse.has(b.course)) byCourse.set(b.course, []);
+    byCourse.get(b.course).push(b);
+  }
+  return [...byCourse.entries()].sort((a, b) => a[0] - b[0]).map(([course, rows]) => {
+    const capacity = 3 ** course;
+    const times = rows.map((r) => new Date(r.created_at).getTime()).sort((a, b) => a - b);
+    return {
+      course,
+      blocks: rows.length,
+      capacity,
+      filled: rows.length >= capacity,
+      span_seconds: rows.length >= 2 ? Math.round((times[times.length - 1] - times[0]) / 1000) : null,
+    };
+  });
+}
+
+/** 4.8 auto-seal predicate: published date passed OR geometry cap reached. */
+export function seasonShouldAutoSeal(season, blocksTotal, nowMs = 0) {
+  if (season.state !== "open") return false;
+  if (season.seal_date && nowMs >= new Date(season.seal_date).getTime()) return true;
+  if (season.block_cap != null && blocksTotal >= Number(season.block_cap)) return true;
+  return false;
+}
+
+const esc = (s) => String(s ?? "").replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/** Capstone certificate — issued to every block at Sealing (4.8). Pure SVG;
+ *  all figures come from the ledger the caller passes in. */
+export function capstoneSvg({ block, tributeCount, incomeUsdMicros, season }) {
+  const lines = [
+    ["SEASON " + season.id + " OF GIZA — SEALED", 26, "#e8c66b"],
+    [`Block #${block.block_id} · course ${block.course}, position ${block.position_in_course}`, 46, "#e8d9b0"],
+    [block.dynasty ? `Dynasty of ${block.dynasty}` : "Of no dynasty", 64, "#9a8a60"],
+    [block.inscription ? `“${block.inscription}”` : "(no inscription)", 84, "#c9b078"],
+    [`${tributeCount} tributes received, chain-verified`, 104, "#9a8a60"],
+    [`Sealed ${String(season.sealed_at ?? "").slice(0, 10)} — the monument stands forever`, 122, "#7a6636"],
+  ];
+  void incomeUsdMicros; // figures beyond counts stay on the live plaque/ledger
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="560" height="150" role="img" aria-label="Giza capstone certificate for block ${block.block_id}">` +
+    `<rect width="560" height="150" rx="10" fill="#120e06" stroke="#7a6636"/>` +
+    `<polygon points="530,18 544,42 516,42" fill="#e8c66b"/>` +
+    lines.map(([text, y, fill], i) =>
+      `<text x="20" y="${y}" font-family="Georgia,serif" font-size="${i === 0 ? 16 : 12}" fill="${fill}">${esc(text)}</text>`).join("") +
+    `</svg>`
+  );
+}
+
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const addrFromTopic = (topic) => `0x${String(topic ?? "").slice(-40)}`.toLowerCase();
 
@@ -690,8 +743,43 @@ async function finalizeJoin(join, hubUrl) {
 }
 
 // ── route handlers ────────────────────────────────────────────────────────
+/** Shared Sealing routine (admin kill switch AND auto-seal). Idempotent —
+ *  the state='open' guard makes concurrent sealers converge. */
+async function sealSeason(season) {
+  const flipped = await sql(
+    "UPDATE giza_seasons SET state = 'sealed', sealed_at = clock_timestamp() WHERE id = $1 AND state = 'open' RETURNING id",
+    [season.id]);
+  if (!flipped.length) return { season_id: season.id, state: "sealed", already: true };
+  const chambers = await sql(
+    `SELECT j.id, j.reserved_course, COUNT(p.position) FILTER (WHERE p.settled)::int AS settled_count
+       FROM giza_joins j LEFT JOIN giza_join_positions p ON p.join_id = j.id AND p.plan_version = j.plan_version
+      WHERE j.season_id = $1 AND j.state NOT IN ('finalized','cancelled','expired')
+      GROUP BY j.id HAVING COUNT(p.position) FILTER (WHERE p.settled) > 0`, [season.id]);
+  for (const chamber of chambers) {
+    await appendEvent("chamber_recorded", chamber.id, {
+      join_id: chamber.id, settled_positions: Number(chamber.settled_count), reserved_course: chamber.reserved_course,
+    });
+  }
+  await appendEvent("season_sealed", String(season.id), { season_id: season.id, unfinished_chambers: chambers.length });
+  return { season_id: season.id, state: "sealed", unfinished_chambers: chambers.length };
+}
+
+/** Lazy auto-seal (4.8): the published date passing or the geometry cap
+ *  filling seals on the next relevant request — no scheduler needed. */
+async function loadSeasonAutoSealing() {
+  let season = await loadSeason();
+  if (season.state === "open") {
+    const count = await sql("SELECT COUNT(*)::int AS n FROM giza_blocks WHERE season_id = $1", [season.id]);
+    if (seasonShouldAutoSeal(season, Number(count[0].n), Date.now())) {
+      await sealSeason(season);
+      season = await loadSeason();
+    }
+  }
+  return season;
+}
+
 async function handleSoftQuote(req, hubUrl) {
-  const season = await loadSeason();
+  const season = await loadSeasonAutoSealing();
   if (season.state === "sealed") return err(410, "SEASON_SEALED", "the season is sealed; the monument is frozen", { monument: hubUrl });
   const body = await req.json().catch(() => ({}));
   const sponsorId = Number(body.sponsor_block_id);
@@ -850,6 +938,13 @@ async function handleAccept(body, join, hubUrl) {
 }
 
 async function handleAttachPayment(body, join, hubUrl) {
+  // Monument freeze: after Sealing no join may advance — a partially paid
+  // join is an unfinished chamber forever (its settled tributes stay in the
+  // public ledger; the sealed papyrus told the joiner not to pay).
+  const sealedSeason = await loadSeason();
+  if (sealedSeason.state === "sealed") {
+    return err(410, "SEASON_SEALED", "the season sealed; this join is preserved as an unfinished chamber and cannot advance");
+  }
   if (Number(body.revision) !== join.revision) return staleRevision(join);
   if (!["accepted", "paying", "reconciling"].includes(join.state)) {
     return err(409, "JOIN_NOT_PAYABLE", `attach-payment is not valid in state ${join.state}`, { state: join.state });
@@ -1103,8 +1198,31 @@ export default async (req) => {
     if (path === "/api/events" && method === "GET") return handleEvents(url);
 
     if (path === "/api/season" && method === "GET") {
+      const season = await loadSeasonAutoSealing();
+      return ok({
+        season_id: season.id, state: season.state, courses: season.courses,
+        block_cap: Number(season.block_cap), seal_date: season.seal_date, sealed_at: season.sealed_at,
+      });
+    }
+
+    m = /^\/api\/blocks\/(\d+)\/capstone$/.exec(path);
+    if (m && method === "GET") {
       const season = await loadSeason();
-      return ok({ season_id: season.id, state: season.state, courses: season.courses, block_cap: season.block_cap, sealed_at: season.sealed_at });
+      if (season.state !== "sealed") {
+        return err(409, "SEASON_NOT_SEALED", "capstone certificates are issued at the Sealing; the monument is still being built");
+      }
+      const rows = await sql("SELECT * FROM giza_blocks WHERE id = $1", [Number(m[1])]);
+      if (!rows.length) return err(404, "BLOCK_NOT_FOUND", "no such block");
+      const stats = await sql(
+        "SELECT COUNT(*)::int AS n, COALESCE(SUM(amount_usd_micros),0)::bigint AS total FROM giza_ledger WHERE block_id = $1",
+        [Number(m[1])]);
+      const svg = capstoneSvg({
+        block: publicBlock(normalizeBlockRow(rows[0])),
+        tributeCount: Number(stats[0].n),
+        incomeUsdMicros: Number(stats[0].total),
+        season,
+      });
+      return new Response(svg, { headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=3600", "access-control-allow-origin": "*" } });
     }
 
     m = /^\/api\/blocks\/by-host\/([^/]+)$/.exec(path);
@@ -1198,6 +1316,7 @@ export default async (req) => {
         dynasty_depth: top([...dynasties.values()].sort((a, b) => b.max_course - a.max_course)),
         top_sponsors: top([...bySponsor.entries()].map(([id, n]) => ({ block_id: id, recruits: n })).sort((a, b) => b.recruits - a.recruits)),
         top_earners: top([...income.entries()].map(([id, v]) => ({ block_id: id, income_usd_micros: v })).sort((a, b) => b.income_usd_micros - a.income_usd_micros)),
+        course_speed: courseSpeed(blocks),
         latest_inscriptions: top(blocks.filter((b) => b.inscription).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map((b) => ({ block_id: Number(b.id), inscription: b.inscription, dynasty: b.dynasty }))),
         loneliest_block: blocks.filter((b) => !b.is_pharaoh && !blocks.some((c) => c.parent_block_id === b.id)).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).slice(0, 1).map((b) => publicBlock(b, income))[0] ?? null,
         plaque: `${hubUrl}/api/plaque`,
@@ -1235,22 +1354,37 @@ export default async (req) => {
     }
 
     if (path === "/api/admin/seal" && method === "POST") {
-      if (!adminAuthorized(req)) return err(401, "ADMIN_AUTH_REQUIRED", "hub service key required");
+      if (!adminAuthorized(req)) return err(401, "ADMIN_AUTH_REQUIRED", "hub admin secret required");
       const season = await loadSeason();
       if (season.state === "sealed") return ok({ season_id: season.id, state: "sealed", already: true });
-      await sql("UPDATE giza_seasons SET state = 'sealed', sealed_at = clock_timestamp() WHERE id = $1 AND state = 'open'", [season.id]);
-      const chambers = await sql(
-        `SELECT j.id, j.reserved_course, COUNT(p.position) FILTER (WHERE p.settled)::int AS settled_count
-           FROM giza_joins j LEFT JOIN giza_join_positions p ON p.join_id = j.id AND p.plan_version = j.plan_version
-          WHERE j.season_id = $1 AND j.state NOT IN ('finalized','cancelled','expired')
-          GROUP BY j.id HAVING COUNT(p.position) FILTER (WHERE p.settled) > 0`, [season.id]);
-      for (const chamber of chambers) {
-        await appendEvent("chamber_recorded", chamber.id, {
-          join_id: chamber.id, settled_positions: Number(chamber.settled_count), reserved_course: chamber.reserved_course,
-        });
+      return ok(await sealSeason(season));
+    }
+
+    if (path === "/api/admin/season" && method === "POST") {
+      if (!adminAuthorized(req)) return err(401, "ADMIN_AUTH_REQUIRED", "hub admin secret required");
+      const season = await loadSeason();
+      if (season.state === "sealed") return err(409, "SEASON_SEALED", "a sealed season's geometry is stone");
+      const body = await req.json().catch(() => ({}));
+      const sets = [];
+      const params = [season.id];
+      if (body.seal_date !== undefined) {
+        if (body.seal_date !== null && Number.isNaN(Date.parse(body.seal_date))) return err(400, "INVALID_SEAL_DATE", "seal_date must be an ISO instant or null");
+        params.push(body.seal_date);
+        sets.push(`seal_date = $${params.length}`);
       }
-      await appendEvent("season_sealed", String(season.id), { season_id: season.id, unfinished_chambers: chambers.length });
-      return ok({ season_id: season.id, state: "sealed", unfinished_chambers: chambers.length });
+      for (const field of ["courses", "block_cap"]) {
+        if (body[field] !== undefined) {
+          const value = Number(body[field]);
+          if (!Number.isInteger(value) || value < 1) return err(400, "INVALID_GEOMETRY", `${field} must be a positive integer`);
+          params.push(value);
+          sets.push(`${field} = $${params.length}`);
+        }
+      }
+      if (!sets.length) return err(400, "NOTHING_TO_UPDATE", "provide seal_date, courses, or block_cap");
+      const rows = await sql(`UPDATE giza_seasons SET ${sets.join(", ")} WHERE id = $1 AND state = 'open' RETURNING *`, params);
+      if (!rows.length) return err(409, "SEASON_SEALED", "the season sealed concurrently");
+      const s = rows[0];
+      return ok({ season_id: s.id, state: s.state, courses: s.courses, block_cap: Number(s.block_cap), seal_date: s.seal_date });
     }
 
     return err(404, "NOT_FOUND", "unknown hub route");

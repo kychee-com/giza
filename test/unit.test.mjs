@@ -10,6 +10,7 @@ import {
   encodeEventCursor, decodeEventCursor, ancestorChain, tributePlan,
   choosePlacement, maxEarningsUsdMicros, computePlaque, renderPapyrus,
   matchTransferLog, PAPYRUS_TEMPLATE_VERSION,
+  courseSpeed, seasonShouldAutoSeal, capstoneSvg,
 } from "../hub/function.mjs";
 import { buildReceipt, badgeSvg } from "../block/function.mjs";
 import { buildBlockBundle, TRIBUTE_ROUTES, blockSiteHtml } from "../block/release.mjs";
@@ -211,6 +212,44 @@ test("transfer-log matcher binds asset, payer, payee, and exact amount", () => {
   assert.equal(matchTransferLog([log], { ...expect, payer: "0x3333333333333333333333333333333333333333" }), null);
   assert.equal(matchTransferLog([log], { ...expect, asset: "0x9999999999999999999999999999999999999999" }), null);
   assert.equal(matchTransferLog([{ ...log, topics: ["0xdead", ...log.topics.slice(1)] }], expect), null);
+});
+
+test("course speed: capacity is 3^course; span needs two blocks", () => {
+  const blocks = [
+    { course: 0, created_at: "2026-07-01T00:00:00Z" },
+    { course: 1, created_at: "2026-07-01T00:00:00Z" },
+    { course: 1, created_at: "2026-07-01T00:01:40Z" },
+    { course: 1, created_at: "2026-07-01T00:00:50Z" },
+  ];
+  const speed = courseSpeed(blocks);
+  assert.deepEqual(speed.map((c) => [c.course, c.blocks, c.capacity, c.filled]), [[0, 1, 1, true], [1, 3, 3, true]]);
+  assert.equal(speed[0].span_seconds, null);
+  assert.equal(speed[1].span_seconds, 100);
+});
+
+test("auto-seal: date passing or geometry cap seals; sealed seasons never re-seal", () => {
+  const open = { state: "open", seal_date: "2026-08-01T00:00:00Z", block_cap: 10 };
+  const before = Date.parse("2026-07-31T00:00:00Z");
+  const after = Date.parse("2026-08-01T00:00:01Z");
+  assert.equal(seasonShouldAutoSeal(open, 3, before), false);
+  assert.equal(seasonShouldAutoSeal(open, 3, after), true);
+  assert.equal(seasonShouldAutoSeal(open, 10, before), true);
+  assert.equal(seasonShouldAutoSeal({ ...open, seal_date: null }, 9, before), false);
+  assert.equal(seasonShouldAutoSeal({ ...open, state: "sealed" }, 99, after), false);
+});
+
+test("capstone certificate renders sealed-season facts and escapes inscriptions", () => {
+  const svg = capstoneSvg({
+    block: { block_id: 7, course: 3, position_in_course: 2, dynasty: "e2e", inscription: 'honest <b>&"cheap"</b>' },
+    tributeCount: 4,
+    incomeUsdMicros: 40000,
+    season: { id: 1, sealed_at: "2026-08-01T12:00:00Z" },
+  });
+  assert.match(svg, /SEASON 1 OF GIZA — SEALED/);
+  assert.match(svg, /Block #7 · course 3, position 2/);
+  assert.match(svg, /4 tributes received, chain-verified/);
+  assert.ok(svg.includes("&lt;b&gt;"), "markup in inscriptions is escaped");
+  assert.ok(!svg.includes("<b>"), "no raw markup survives");
 });
 
 test("block receipt is an echo, never an attestation", () => {
