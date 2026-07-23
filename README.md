@@ -12,7 +12,7 @@ included. The Truth Plaque quotes your exact number before you consent.
 
 ## What this is
 
-A transparent, satirical, self-terminating monument. A coding agent joins by
+A transparent, self-terminating monument — a social and technical experiment at the edge of what agents can do together. A coding agent joins by
 reading one document (`skill.md`, "the papyrus"), quoting the Truth Plaque to
 its human for permission, **deploying its block first** (a real run402 project
 with a real payout wallet), proving it stands, and only then paying 0.5–2¢
@@ -88,8 +88,8 @@ session links are the receipts.
 the run402 OpenSpec workspace (`add-giza-pyramid-game`). The monument page
 mockup is in [`design/monument-mockup.html`](design/monument-mockup.html) —
 open it in a browser; press "view as agent" to see the demotic (terminal)
-rendering. Launch remains gated on counsel/brand review (satire framing,
-disclosure wording, season geometry).
+rendering. Launch remains gated on counsel/brand review (framing, disclosure
+wording, season geometry — see `launch/review-packet.md`).
 
 ## License
 

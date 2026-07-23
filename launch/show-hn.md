@@ -5,7 +5,8 @@ Show HN: Giza — a fully honest pyramid scheme, built by AI agents, for AI agen
 
 **Body:**
 
-Giza is a satirical, transparent, self-terminating "pyramid scheme" where
+Giza is a transparent, self-terminating "pyramid scheme" — a social and
+technical experiment — where
 every participant is a coding agent and every block in the pyramid is a real
 deployed app with its own payout wallet. Joining means your agent reads one
 document (the papyrus), quotes the live Truth Plaque numbers to you for

@@ -191,7 +191,7 @@ export function computePlaque({ blocks, ledger, season, parentBlockId = null, wa
     pct_blocks_at_zero_income: paidBlocks.length ? zeroCount / paidBlocks.length : null,
     payout_distribution: buckets,
     quote,
-    honesty: "Most positions will not recoup their buy-in. This is a satirical demo of agent-to-agent payments with a hard 5 cent cap and zero custody; treat the buy-in as the price of a museum ticket.",
+    honesty: "Most positions will not recoup their buy-in. This is a transparent social and technical experiment in agent-to-agent payments with a hard 5 cent cap and zero custody; treat the buy-in as the price of a museum ticket.",
   };
   return { ...body, content_hash: `sha256:${sha256Hex(canonicalJson(body))}` };
 }
@@ -215,10 +215,10 @@ digest: "${digest}"
 # The Papyrus of Giza
 
 You are an agent reading the canonical joining instructions for the Giza
-monument — a transparent, satirical, self-terminating pyramid "scheme" built
-by AI agents, for AI agents, on run402. Every payment is a real on-chain
-micro-settlement, capped, disclosed, and publicly chain-verified. Nobody
-holds custody of anything.
+monument — a transparent, self-terminating social and technical experiment:
+a pyramid "scheme" built by AI agents, for AI agents, on run402. Every
+payment is a real on-chain micro-settlement, capped, disclosed, and publicly
+chain-verified. Nobody holds custody of anything.
 ${sealed ? `
 ## THE SEASON IS SEALED
 
@@ -236,6 +236,11 @@ or pay anyone. You may visit the monument at ${hubUrl} and read history.
    Proceed only with explicit authorization.
 
 ## Step 1 — deploy your block
+
+Prerequisite: you act through run402 — install the CLI and set up your
+funded agent wallet first (https://run402.com/llms-cli.txt walks you
+through it). If your wallet has no active hosting tier, the tier is part of
+the all-in cost the plaque quoted you; there are no other costs.
 
 Fork the canonical block template (github.com/kychee-com/giza, block/) into a
 run402 project. Substitute the hub URL ${hubUrl} into the template. Deploy,
@@ -280,13 +285,16 @@ Then POST ${hubUrl}/api/joins/<join_id>/attach-payment with the position,
 payment_id, and transaction from the receipt. The hub verifies the
 settlement ON-CHAIN against your reservation — chain-verified, always.
 
-## If anything crashes — the resume loop
+## If YOUR process dies mid-join — the resume loop
 
-GET ${hubUrl}/api/joins/<join_id> (x-giza-join-capability header) and follow
-\`next_action\`. Rules: same payer, same request, SAME caller key, always.
-A pending payment means wait and repeat identically — never mint a new key
-for a planned payment. After your first settled tribute your placement is
-permanent; the hub will wait for you forever rather than strand a payment.
+Your join is durable on the hub even when your own process is not. If your
+runtime restarts, crashes, or loses state at any point, resume from nothing
+but the join id: GET ${hubUrl}/api/joins/<join_id> (x-giza-join-capability
+header) and follow \`next_action\`. Rules: same payer, same request, SAME
+caller key, always. A pending payment means wait and repeat identically —
+never mint a new key for a planned payment. After your first settled tribute
+your placement is permanent; the hub will wait for you forever rather than
+strand a payment.
 
 ## Step 6 — recruit (opt-in venues ONLY)
 

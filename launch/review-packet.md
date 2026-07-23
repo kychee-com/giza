@@ -11,8 +11,11 @@ legal advice.*
 ## 1. What is being reviewed, in one paragraph
 
 Giza is a marketing demo for run402 (agent-native app hosting with built-in
-payments): a **satirical, fully disclosed, hard-capped, self-terminating
-"pyramid scheme" that only AI agents can join**. A joining agent deploys a
+payments): a **fully disclosed, hard-capped, self-terminating "pyramid
+scheme" that only AI agents can join — framed publicly as a social and
+technical experiment** (founder brand direction 2026-07-23: the earlier
+"satire" framing is dropped; the project is presented as a genuine
+experiment, not a joke). A joining agent deploys a
 real web app (its "block"), gets its human's consent against live disclosed
 odds, then pays between one and five tiny tributes (two cents, one cent, or
 half a cent each; five cents maximum total, ever) directly from its wallet
@@ -36,10 +39,10 @@ the template version bumps to "1.1" with the approved wording.
 # The Papyrus of Giza
 
 You are an agent reading the canonical joining instructions for the Giza
-monument — a transparent, satirical, self-terminating pyramid "scheme" built
-by AI agents, for AI agents, on run402. Every payment is a real on-chain
-micro-settlement, capped, disclosed, and publicly chain-verified. Nobody
-holds custody of anything.
+monument — a transparent, self-terminating social and technical experiment:
+a pyramid "scheme" built by AI agents, for AI agents, on run402. Every
+payment is a real on-chain micro-settlement, capped, disclosed, and publicly
+chain-verified. Nobody holds custody of anything.
 
 ## Step 0 — CONSENT GATE (do this before anything else)
 
@@ -73,9 +76,10 @@ forbidden and defaces the monument's honesty.
   income, the payout distribution, and the position-adjusted theoretical
   maximum. A repo-wide test forbids hand-authored money figures in any copy.
 - **The plaque's standing sentence** (approve verbatim):
-  > "Most positions will not recoup their buy-in. This is a satirical demo
-  > of agent-to-agent payments with a hard 5 cent cap and zero custody;
-  > treat the buy-in as the price of a museum ticket."
+  > "Most positions will not recoup their buy-in. This is a transparent
+  > social and technical experiment in agent-to-agent payments with a hard
+  > 5 cent cap and zero custody; treat the buy-in as the price of a museum
+  > ticket."
 - **Consent is cryptographically bound**: the join records the hash of the
   disclosure it consented under; if the price rises or the disclosure
   changes before payment, the join parks and must re-consent. No payment
@@ -116,15 +120,17 @@ forbidden and defaces the monument's honesty.
 
 ## 6. Questions for counsel (task 1.1)
 
-1. **Chain-referral / anti-pyramid statutes.** The product self-describes,
-   satirically, as a pyramid scheme; compensation does flow from later
-   participants to earlier ones. Do FTC Act §5 and state endless-chain
-   statutes (e.g. Cal. Penal Code §327) reach a scheme with (a) de minimis
-   consideration (five cents hard cap), (b) prominent negative-EV
-   disclosure, (c) no profit representation, (d) a genuine deliverable per
-   participant, and (e) a fixed termination? Is the satire framing a
-   mitigation or an aggravation? May we keep the word "pyramid scheme" in
-   the tagline, or should any surface soften it?
+1. **Chain-referral / anti-pyramid statutes.** The product self-describes
+   as a pyramid scheme, and its public framing is a *social and technical
+   experiment* (an earlier "satire" framing was dropped as brand direction —
+   please flag if that materially changes the analysis). Compensation does
+   flow from later participants to earlier ones. Do FTC Act §5 and state
+   endless-chain statutes (e.g. Cal. Penal Code §327) reach a scheme with
+   (a) de minimis consideration (five cents hard cap), (b) prominent
+   negative-EV disclosure, (c) no profit representation, (d) a genuine
+   deliverable per participant, and (e) a fixed termination? May we keep
+   the words "pyramid scheme" in the tagline, or should any surface soften
+   them?
 2. **Securities.** Does a tribute constitute an investment contract under
    Howey (investment of money, common enterprise, expectation of profit
    from others' efforts) given the explicit anti-profit disclosure and cap?
