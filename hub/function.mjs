@@ -316,7 +316,14 @@ export function matchTransferLog(logs, { asset, payer, payTo, amountAtomic }) {
 }
 
 // ── infrastructure ────────────────────────────────────────────────────────
-const sql = (query, params) => adminDb().sql(query, params);
+/** The admin SQL endpoint returns an envelope `{status, rows, row_count,
+ *  fields}`; older SDK typings say "rows array". Unwrap defensively so the
+ *  hub works with either shape. */
+const sql = async (query, params) => {
+  const result = await adminDb().sql(query, params);
+  if (Array.isArray(result)) return result;
+  return result?.rows ?? [];
+};
 
 function err(status, code, message, extra = {}) {
   return Response.json({ code, message, ...extra }, { status, headers: { "access-control-allow-origin": "*" } });
