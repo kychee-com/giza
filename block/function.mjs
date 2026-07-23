@@ -77,7 +77,7 @@ export function badgeSvg(stats) {
   );
 }
 
-let badgeCache = { at: 0, body: null };
+let badgeCache = { at: 0, ok: false, body: null };
 
 async function hubJson(path) {
   const res = await fetch(`${CONFIG.hubUrl}${path}`, { headers: { accept: "application/json" } });
@@ -174,17 +174,20 @@ export default async (req) => {
   }
 
   if (path === "/badge.svg") {
-    const fresh = Date.now() - badgeCache.at < 60_000;
-    if (!fresh) {
+    // Successful renders cache 60s; a failed stats fetch must not pin the
+    // fallback — retry after 5s so one hub blip is a blip, not a minute.
+    const ttl = badgeCache.ok ? 60_000 : 5_000;
+    if (Date.now() - badgeCache.at >= ttl) {
       try {
         const self = await selfBlock(req);
         const ledger = await hubJson(`/api/blocks/${self.block_id}/ledger`);
         badgeCache = {
           at: Date.now(),
+          ok: true,
           body: badgeSvg({ block_id: self.block_id, course: self.course, settled_tribute_count: ledger.total }),
         };
       } catch {
-        badgeCache = { at: Date.now(), body: badgeCache.body ?? badgeSvg(null) }; // cached fallback
+        badgeCache = { at: Date.now(), ok: false, body: badgeCache.body ?? badgeSvg(null) };
       }
     }
     return new Response(badgeCache.body, {
