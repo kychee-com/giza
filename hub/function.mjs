@@ -552,7 +552,10 @@ async function joinView(join, hubUrl) {
 }
 
 // ── health probes (D13) ───────────────────────────────────────────────────
-const probeFetch = (url, init = {}) => fetch(url, { ...init, signal: AbortSignal.timeout(3000), redirect: "manual" });
+// The /lineage probe traverses block→hub (two chained invocations, possibly
+// both cold) — budget accordingly; probes run in parallel so wall time is
+// the slowest single probe.
+const probeFetch = (url, init = {}) => fetch(url, { ...init, signal: AbortSignal.timeout(6500), redirect: "manual" });
 
 function parseChallenge(headers, body) {
   const fromBody = body?.accepts;
@@ -1014,8 +1017,24 @@ export default async (req) => {
   }
 
   try {
+    // papyrus by block HOST (blocks redirect here without knowing their id;
+    // an unregistered host gets the apex papyrus)
+    let m = /^\/blocks\/by-host\/([^/]+)\/skill\.md$/.exec(path);
+    if (m && method === "GET") {
+      const season = await loadSeason();
+      const rows = await sql(
+        "SELECT id FROM giza_blocks WHERE lower(host) = lower($1) UNION ALL (SELECT id FROM giza_blocks WHERE is_pharaoh) LIMIT 1",
+        [decodeURIComponent(m[1])]);
+      if (!rows.length) return err(404, "NOT_FOUND", "no blocks exist yet");
+      const markdown = renderPapyrus({
+        hubUrl, sponsorBlockId: Number(rows[0].id), seasonState: season.state,
+        generatedAt: new Date().toISOString(), disclosureVersion: season.disclosure_version,
+      });
+      return new Response(markdown, { headers: { "content-type": "text/markdown; charset=utf-8", "access-control-allow-origin": "*" } });
+    }
+
     // papyrus: /blocks/:id/skill.md (D16 — the ONE canonical instruction doc)
-    let m = /^\/blocks\/(pharaoh|\d+)\/skill\.md$/.exec(path);
+    m = /^\/blocks\/(pharaoh|\d+)\/skill\.md$/.exec(path);
     if (m && method === "GET") {
       const season = await loadSeason();
       let sponsorId = m[1];

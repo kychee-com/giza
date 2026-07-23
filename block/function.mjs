@@ -149,10 +149,11 @@ export default async (req) => {
 
   if (path === "/skill.md") {
     // D16: blocks never author instructions. One canonical hub papyrus.
-    const self = await selfBlock(req).catch(() => null);
-    const target = self
-      ? `${CONFIG.hubUrl}/blocks/${self.block_id}/skill.md`
-      : `${CONFIG.hubUrl}/blocks/pharaoh/skill.md`;
+    // Instant redirect (no upstream call — health probes budget seconds):
+    // the hub resolves this host to its block, or serves the apex papyrus
+    // for a not-yet-registered block.
+    const host = new URL(req.url).host;
+    const target = `${CONFIG.hubUrl}/blocks/by-host/${encodeURIComponent(host)}/skill.md`;
     return new Response(`The canonical papyrus for this block lives at ${target}\n`, {
       status: 308,
       headers: { location: target, "content-type": "text/plain; charset=utf-8" },
