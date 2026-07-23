@@ -5,6 +5,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   TRIBUTE_SCHEDULE, canonicalJson, sha256Hex, callerKey, signableMessage,
   encodeEventCursor, decodeEventCursor, ancestorChain, tributePlan,
@@ -191,11 +194,17 @@ test("papyrus: sealed season instructs no attempt", () => {
   assert.ok(!md.includes("run402 pay"), "a sealed papyrus contains no payment instructions");
 });
 
-test("no-hand-authored-numbers: papyrus and both sites carry no literal money figures", () => {
+test("no-hand-authored-numbers: papyrus, both sites, and ALL launch copy carry no literal money figures", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const launchDir = join(here, "..", "launch");
+  const launchCopy = readdirSync(launchDir).filter((f) => f.endsWith(".md"))
+    .map((f) => readFileSync(join(launchDir, f), "utf8"));
+  assert.ok(launchCopy.length >= 3, "launch drafts are covered by the grep");
   const sources = [
     renderPapyrus({ hubUrl: "https://h.example", sponsorBlockId: 1, seasonState: "open", generatedAt: "x", disclosureVersion: 1 }),
     hubSiteHtml(),
     blockSiteHtml("https://h.example"),
+    ...launchCopy,
   ];
   // Forbid $-amounts and ¢-amounts in authored copy. Route ids like
   // /tribute/2c are identifiers, not figures, and don't match these shapes.
