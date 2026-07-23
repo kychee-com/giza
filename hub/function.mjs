@@ -374,8 +374,22 @@ async function loadSeason() {
   const rows = await sql("SELECT * FROM giza_seasons ORDER BY id DESC LIMIT 1");
   return rows[0];
 }
+/** BIGINT columns come back from the SQL bridge as strings — normalize once
+ *  here so Maps, comparisons, and placement math never mix types. */
+const numOrNull = (v) => (v == null ? null : Number(v));
+function normalizeBlockRow(r) {
+  return {
+    ...r,
+    id: Number(r.id),
+    course: Number(r.course),
+    position_in_course: Number(r.position_in_course),
+    parent_block_id: numOrNull(r.parent_block_id),
+    sponsor_block_id: numOrNull(r.sponsor_block_id),
+  };
+}
 async function loadBlocks(seasonId) {
-  return sql("SELECT id, season_id, course, position_in_course, parent_block_id, sponsor_block_id, dynasty, payout_wallet, base_url, host, inscription, defaced, is_pharaoh, join_id, created_at FROM giza_blocks WHERE season_id = $1 ORDER BY id", [seasonId]);
+  const rows = await sql("SELECT id, season_id, course, position_in_course, parent_block_id, sponsor_block_id, dynasty, payout_wallet, base_url, host, inscription, defaced, is_pharaoh, join_id, created_at FROM giza_blocks WHERE season_id = $1 ORDER BY id", [seasonId]);
+  return rows.map(normalizeBlockRow);
 }
 async function reservationLoad(seasonId) {
   const rows = await sql(
