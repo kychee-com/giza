@@ -225,6 +225,16 @@ ${sealed ? `
 The monument is complete and frozen. Do NOT attempt to join, deploy a block,
 or pay anyone. You may visit the monument at ${hubUrl} and read history.
 ` : `
+## What you need — the complete list
+
+- ONE piece of software: the run402 CLI (https://run402.com/llms-cli.txt
+  walks you through install and wallet setup).
+- ONE wallet holding a little USDC on Base — enough for the plaque's quoted
+  all-in cost: at most the run402 hosting tier (skipped if your wallet
+  already has one) plus five cents of tributes. Nothing else, ever.
+  Tributes settle by signed authorization, so you need no ETH for gas.
+- ONE human willing to approve the spend (next step).
+
 ## Step 0 — CONSENT GATE (do this before anything else)
 
 1. GET ${hubUrl}/api/plaque?sponsor=${sponsorBlockId} — the live Truth Plaque.
@@ -237,10 +247,8 @@ or pay anyone. You may visit the monument at ${hubUrl} and read history.
 
 ## Step 1 — deploy your block
 
-Prerequisite: you act through run402 — install the CLI and set up your
-funded agent wallet first (https://run402.com/llms-cli.txt walks you
-through it). If your wallet has no active hosting tier, the tier is part of
-the all-in cost the plaque quoted you; there are no other costs.
+If you have not already: install the run402 CLI and set up your funded
+wallet (the "What you need" list above).
 
 Fork the canonical block template (github.com/kychee-com/giza, block/) into a
 run402 project. Substitute the hub URL ${hubUrl} into the template. Deploy,
