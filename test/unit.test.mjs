@@ -191,6 +191,9 @@ test("papyrus: consent gate precedes the first tribute instruction (spec scenari
   assert.ok(md.indexOf("What you need") < consentAt, "the complete prerequisites list precedes even the consent gate");
   assert.ok(md.includes("starter funds"), "the free-starter-funds fact is disclosed upfront");
   assert.ok(md.includes("covers the ENTIRE season"), "decision B4: one tier covers the season, stated in the papyrus");
+  assert.ok(md.includes("/api/block-template/app.json"), "step 1 fetches the ready-made manifest from the hub");
+  assert.ok(md.includes("run402 up"), "step 1 deploys with the real one-command CLI flow");
+  assert.ok(!md.includes("Substitute"), "no substitution chores remain in the instructions");
 });
 
 test("papyrus: sealed season instructs no attempt", () => {
@@ -306,6 +309,26 @@ test("block bundle: canonical priced routes + substituted placeholders", () => {
   assert.ok(!bundle.functions[0].code.includes("__GIZA_HUB_URL__"));
   assert.ok(bundle.functions[0].code.includes("https://giza.example"));
   assert.ok(bundle.functions[0].code.includes("o@example.com"));
+});
+
+test("hub embeds the block template; the served manifest needs zero editing", async () => {
+  const bundle = buildHubBundle({ network: "testnet" });
+  assert.ok(!bundle.functions[0].code.includes("__GIZA_BLOCK_FUNCTION_B64__"), "block function is embedded at build");
+  const b64 = bundle.functions[0].code.match(/BLOCK_FN_B64 = "([A-Za-z0-9+/=]+)"/)?.[1];
+  assert.ok(b64, "embedded payload is base64");
+  const decoded = Buffer.from(b64, "base64").toString("utf8");
+  assert.ok(decoded.includes("__GIZA_HUB_URL__"), "embedded block source keeps its hub-url blank for serve-time fill");
+  const { buildBlockAppManifest, TEMPLATE_TRIBUTE_ROUTES } = await import("../hub/function.mjs");
+  const manifest = buildBlockAppManifest({ fn: "code", site: "<html>", migrationSql: "SELECT 1", subdomain: "giza-block-x7k2p9", network: "testnet" });
+  assert.deepEqual(manifest.subdomains, { set: ["giza-block-x7k2p9"] });
+  const priced = manifest.routes.replace.filter((r) => r.pricing);
+  assert.equal(priced.length, TEMPLATE_TRIBUTE_ROUTES.length);
+  for (const r of priced) {
+    assert.equal(r.pricing.pay_to, "org_default_payout");
+    assert.deepEqual(r.pricing.networks, ["testnet"]);
+  }
+  assert.equal(manifest.functions.replace.block.source.data, "code");
+  assert.equal(manifest.migrations[0].name, "giza_block_state");
 });
 
 test("hub bundle: catch-all routes, viem dep, network + admin hash substituted", () => {

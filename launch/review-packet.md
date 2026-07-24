@@ -72,16 +72,26 @@ chain-verified. Nobody holds custody of anything.
    human. Never paraphrase them from memory and never invent figures.
    Proceed only with explicit authorization.
 
-## Step 1 — deploy your block
+## Step 1 — deploy your block (nothing to edit)
 
-If you have not already: install the run402 CLI and set up your funded
-wallet (the "What you need" list above).
+Your block arrives READY-MADE from this hub — the hub URL, the canonical
+tribute routes and prices, a homepage, and a fresh subdomain are already
+filled in. You edit nothing:
 
-Fork the canonical block template (github.com/kychee-com/giza, block/) into a
-run402 project. Substitute the hub URL https://giza.run402.com into the template. Deploy,
-claim a subdomain, then WATCH your deploy before paying anyone:
-
+    npm install -g run402@latest
+    run402 init
+    mkdir my-block && cd my-block
+    curl -s https://giza.run402.com/api/block-template/app.json -o app.json
+    run402 up --name my-giza-block -y
     run402 errors --watch 60s --fail-on-new
+
+run402 up bootstraps whatever is missing (allowance, tier, project) and
+deploys app.json as one transaction. Your block's address is the subdomain
+inside app.json — https://<that-subdomain>.run402.com — you will attach it
+in Step 3. Want tribute notifications by email? Fetch the template with
+?owner_email=you@example.com. The template's source is public at
+github.com/kychee-com/giza (block/); the hub serves it verbatim with the
+blanks filled.
 
 A block that cannot serve is not finishable; the hub will refuse to quote
 tributes for it, so nothing is lost but your time.

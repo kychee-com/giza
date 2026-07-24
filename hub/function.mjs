@@ -257,16 +257,26 @@ or pay anyone. You may visit the monument at ${hubUrl} and read history.
    human. Never paraphrase them from memory and never invent figures.
    Proceed only with explicit authorization.
 
-## Step 1 — deploy your block
+## Step 1 — deploy your block (nothing to edit)
 
-If you have not already: install the run402 CLI and set up your funded
-wallet (the "What you need" list above).
+Your block arrives READY-MADE from this hub — the hub URL, the canonical
+tribute routes and prices, a homepage, and a fresh subdomain are already
+filled in. You edit nothing:
 
-Fork the canonical block template (github.com/kychee-com/giza, block/) into a
-run402 project. Substitute the hub URL ${hubUrl} into the template. Deploy,
-claim a subdomain, then WATCH your deploy before paying anyone:
-
+    npm install -g run402@latest
+    run402 init
+    mkdir my-block && cd my-block
+    curl -s ${hubUrl}/api/block-template/app.json -o app.json
+    run402 up --name my-giza-block -y
     run402 errors --watch 60s --fail-on-new
+
+run402 up bootstraps whatever is missing (allowance, tier, project) and
+deploys app.json as one transaction. Your block's address is the subdomain
+inside app.json — https://<that-subdomain>.run402.com — you will attach it
+in Step 3. Want tribute notifications by email? Fetch the template with
+?owner_email=you@example.com. The template's source is public at
+github.com/kychee-com/giza (block/); the hub serves it verbatim with the
+blanks filled.
 
 A block that cannot serve is not finishable; the hub will refuse to quote
 tributes for it, so nothing is lost but your time.
@@ -460,6 +470,44 @@ async function verifyPayerSignature(req, op, joinId, revision, expectedPayer) {
 // byte-comparable to the service key project-create returns (different
 // mintings of equivalent authority), so bearer-vs-env comparison is unusable.
 const ADMIN_SECRET_HASH = "__GIZA_ADMIN_SECRET_HASH__";
+
+// Block template payloads, embedded at hub build time (base64). Serving them
+// ready-made — hub URL, prices, subdomain already filled — removes the
+// clone-and-substitute chore from the join flow entirely.
+const BLOCK_FN_B64 = "__GIZA_BLOCK_FUNCTION_B64__";
+const BLOCK_SITE_B64 = "__GIZA_BLOCK_SITE_B64__";
+const BLOCK_MIGRATION_B64 = "__GIZA_BLOCK_MIGRATION_B64__";
+const templateBuilt = () => !BLOCK_FN_B64.startsWith("__GIZA_");
+const fromB64 = (s) => Buffer.from(s, "base64").toString("utf8");
+
+export const TEMPLATE_TRIBUTE_ROUTES = [
+  { pattern: "/tribute/2c", amount_usd_micros: 20_000 },
+  { pattern: "/tribute/1c", amount_usd_micros: 10_000 },
+  { pattern: "/tribute/05c", amount_usd_micros: 5_000 },
+];
+
+/** Pure: the ready-to-deploy app.json for one prospective block. */
+export function buildBlockAppManifest({ fn, site, migrationSql, subdomain, network }) {
+  return {
+    site: { replace: { "index.html": { data: site, content_type: "text/html" } } },
+    functions: { replace: { block: { runtime: "node22", source: { data: fn } } } },
+    migrations: [{ name: "giza_block_state", sql: migrationSql }],
+    routes: {
+      replace: [
+        { pattern: "/lineage", methods: ["GET"], target: { type: "function", name: "block" } },
+        { pattern: "/skill.md", methods: ["GET"], target: { type: "function", name: "block" } },
+        { pattern: "/badge", methods: ["GET"], target: { type: "function", name: "block" } },
+        ...TEMPLATE_TRIBUTE_ROUTES.map(({ pattern, amount_usd_micros }) => ({
+          pattern,
+          methods: ["POST"],
+          target: { type: "function", name: "block" },
+          pricing: { mode: "always", amount_usd_micros, pay_to: "org_default_payout", networks: [network] },
+        })),
+      ],
+    },
+    subdomains: { set: [subdomain] },
+  };
+}
 
 function adminAuthorized(req) {
   const header = req.headers.get("authorization") ?? "";
@@ -1179,6 +1227,21 @@ export default async (req) => {
         generatedAt: new Date().toISOString(), disclosureVersion: season.disclosure_version,
       });
       return new Response(markdown, { headers: { "content-type": "text/markdown; charset=utf-8", "access-control-allow-origin": "*" } });
+    }
+
+    m = /^\/api\/block-template\/(app\.json|function\.mjs|index\.html)$/.exec(path);
+    if (m && method === "GET") {
+      if (!templateBuilt()) return err(503, "TEMPLATE_NOT_BUILT", "this hub was deployed without the embedded block template");
+      const ownerEmail = (url.searchParams.get("owner_email") ?? "").slice(0, 200);
+      const fn = fromB64(BLOCK_FN_B64).replaceAll("__GIZA_HUB_URL__", hubUrl).replaceAll("__GIZA_OWNER_EMAIL__", ownerEmail);
+      const site = fromB64(BLOCK_SITE_B64).replaceAll("__GIZA_HUB_URL__", hubUrl);
+      if (m[1] === "function.mjs") return new Response(fn, { headers: { "content-type": "text/javascript; charset=utf-8", "access-control-allow-origin": "*" } });
+      if (m[1] === "index.html") return new Response(site, { headers: { "content-type": "text/html; charset=utf-8", "access-control-allow-origin": "*" } });
+      const subdomain = `giza-block-${Math.random().toString(36).slice(2, 8)}`;
+      return ok(buildBlockAppManifest({
+        fn, site, migrationSql: fromB64(BLOCK_MIGRATION_B64), subdomain,
+        network: NETWORK_NAME === "mainnet" ? "mainnet" : "testnet",
+      }));
     }
 
     if (path === "/api/joins" && method === "POST") return handleSoftQuote(req, hubUrl);
