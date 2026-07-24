@@ -84,6 +84,28 @@ console.log("subdomain:", claim.status, `https://${SUBDOMAIN}.run402.com`);
 console.log("hub project service key (platform credential, KEEP SAFE):", service_key);
 console.log("GIZA ADMIN SECRET (shown ONCE — Bearer for /api/admin/*; rotate by redeploy):", adminSecret);
 
+// Decision B4: seasons are bounded to one tier lease + its serving grace
+// (21 days) so a single tier covers a joiner's entire season. Auto-seals on
+// this date or when the geometry fills, whichever comes first.
+const seasonDays = Number(process.env.GIZA_SEASON_DAYS ?? 21);
+if (seasonDays > 0) {
+  const sealDate = new Date(Date.now() + seasonDays * 86_400_000).toISOString();
+  const hubOrigin = `https://${SUBDOMAIN}.run402.com`;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const res = await fetch(`${hubOrigin}/api/admin/season`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSecret}` },
+      body: JSON.stringify({ seal_date: sealDate }),
+    }).catch(() => null);
+    if (res?.ok) {
+      console.log("season seal date published:", sealDate);
+      break;
+    }
+    if (attempt === 19) console.error("could not publish the seal date (hub not serving yet?) — set it via POST /api/admin/season");
+    await new Promise((r) => setTimeout(r, 6000));
+  }
+}
+
 if (process.argv.includes("--with-pharaoh")) {
   const hubUrl = `https://${SUBDOMAIN}.run402.com`;
   const sub = process.env.GIZA_PHARAOH_SUBDOMAIN ?? "giza-pharaoh";

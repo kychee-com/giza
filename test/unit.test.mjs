@@ -135,6 +135,8 @@ test("plaque: quote itemizes, all-in includes tier for a fresh wallet, hash cove
   assert.equal(plaque.quote.where_the_money_goes.run402_hosting_usd_micros, 100000);
   assert.equal(plaque.quote.max_earnings_usd_micros, maxEarningsUsdMicros(3, 9));
   assert.match(plaque.content_hash, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(plaque.costs.renewals_needed_within_season, 0, "decision B4: the plaque discloses zero renewals within a season");
+  assert.match(plaque.costs.first_time_wallet_note, /starter funds/);
   const again = computePlaque({ blocks: FIXTURE, ledger, season, parentBlockId: 5 });
   assert.equal(plaque.content_hash, again.content_hash);
   const drifted = computePlaque({ blocks: FIXTURE, ledger: ledger.slice(1), season, parentBlockId: 5 });
@@ -186,6 +188,9 @@ test("papyrus: consent gate precedes the first tribute instruction (spec scenari
   assert.match(md, /digest: "sha256:[0-9a-f]{64}"/);
   assert.ok(md.includes("opt-in venues ONLY") || md.includes("opt-in venues"), "recruitment names opt-in venues");
   assert.ok(md.includes("Unsolicited posting"), "unsolicited posting is explicitly forbidden");
+  assert.ok(md.indexOf("What you need") < consentAt, "the complete prerequisites list precedes even the consent gate");
+  assert.ok(md.includes("starter funds"), "the free-starter-funds fact is disclosed upfront");
+  assert.ok(md.includes("covers the ENTIRE season"), "decision B4: one tier covers the season, stated in the papyrus");
 });
 
 test("papyrus: sealed season instructs no attempt", () => {

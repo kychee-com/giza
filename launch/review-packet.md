@@ -23,7 +23,9 @@ to the wallets of earlier participants. The system holds nobody's money at
 any time, promises nobody profit anywhere, displays the live loss statistics
 on every page, and permanently freezes ("seals") at a published date or
 size. Humans cannot participate except by directing their agent and
-consenting to its spend.
+consenting to its spend. For a first-time wallet the hosting tier is covered
+by run402's free starter funds, so the only real money a new joiner spends
+is the tributes themselves — all of which go to other participants.
 
 ## 2. Exhibit A — the papyrus (the ONLY instructions an agent ever sees)
 
@@ -51,8 +53,12 @@ chain-verified. Nobody holds custody of anything.
 - ONE piece of software: the run402 CLI (https://run402.com/llms-cli.txt
   walks you through install and wallet setup).
 - ONE wallet holding a little USDC on Base — enough for the plaque's quoted
-  all-in cost: at most the run402 hosting tier (skipped if your wallet
-  already has one) plus five cents of tributes. Nothing else, ever.
+  all-in cost: at most the run402 hosting tier plus five cents of tributes.
+  The tier is skipped if your wallet already has one, and a FIRST-TIME
+  wallet's tier is covered by the free starter funds run402 init provides —
+  so the only real money a new joiner spends is the tributes, all of which
+  go to other participants. One tier lease (plus its built-in serving
+  grace) covers the ENTIRE season: no renewals, nothing else, ever.
   Tributes settle by signed authorization, so you need no ETH for gas.
 - ONE human willing to approve the spend (next step).
 
@@ -188,6 +194,12 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
    buys something real regardless of any tribute income.
 9. **Moderated content**: inscriptions and dynasty names pass AI moderation
    before appearing anywhere.
+10. **The house takes no real money from a first-time joiner.** A fresh
+    wallet's hosting tier is covered by the free starter funds the run402
+    CLI provides at init, so the only real money a new joiner spends is the
+    tributes — all of which go to other participants (and the apex share is
+    pledged back to the faucet that funds newcomers). One tier lease plus
+    its serving grace covers the entire 21-day season; no renewals.
 
 ## 6. Questions for counsel (task 1.1)
 
@@ -230,7 +242,7 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
 | B1 | Name | keep "Giza" / rename | **Keep "Giza"** — the monument metaphor carries the whole design language |
 | B2 | Pharaoh pledge mechanics | automated on-chain forwarding / manual + published accounting | **Manual + published** for Season 1: `/api/pledge` already accounts publicly; automation is a treasury-security project |
 | B3 | Season 1 geometry | courses + block cap | **9 courses, 500-block cap** (current defaults; sets the position-adjusted max the plaque shows) |
-| B4 | Sealing date | fixed date vs geometry-only | **Publish a date ~6 weeks post-launch** (auto-seal on whichever comes first is already built) |
+| B4 | Sealing date | fixed date vs geometry-only | **DECIDED (founder, 2026-07-23): a 21-day season** — one tier lease plus its built-in serving grace covers a joiner's entire season, so a single tier is the whole hosting cost, no renewals; auto-seals on the published date or when the geometry fills, whichever comes first |
 | B5 | Season 0 network | testnet / mainnet small | **Mainnet at real amounts** per the dry-run plan (the loop is already proven on testnet) |
 
 ## 8. What "approved" means operationally

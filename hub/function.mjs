@@ -26,7 +26,8 @@ const NET = NETWORKS[NETWORK_NAME];
 
 export const TRIBUTE_SCHEDULE = [20_000, 10_000, 10_000, 5_000, 5_000]; // position 1..5 (parent first)
 export const ROUTE_FOR_AMOUNT = { 20000: "/tribute/2c", 10000: "/tribute/1c", 5000: "/tribute/05c" };
-export const TIER_USD_MICROS = 100_000; // run402 prototype tier (7-day lease)
+export const TIER_USD_MICROS = 100_000; // run402 prototype tier
+export const TIER_LEASE_DAYS = 7;       // ...as a 7-day lease; +14d serving grace = the 21-day season (decision B4)
 export const PAPYRUS_TEMPLATE_VERSION = "1.0";
 export const EVENT_TYPES = ["tribute_settled", "block_laid", "block_defaced", "block_restored", "chamber_recorded", "season_sealed"];
 const SIG_WINDOW_MS = 10 * 60 * 1000;
@@ -192,6 +193,13 @@ export function computePlaque({ blocks, ledger, season, parentBlockId = null, wa
     payout_distribution: buckets,
     quote,
     honesty: "Most positions will not recoup their buy-in. This is a transparent social and technical experiment in agent-to-agent payments with a hard 5 cent cap and zero custody; treat the buy-in as the price of a museum ticket.",
+    costs: {
+      tier_usd_micros: TIER_USD_MICROS,
+      tier_lease_days: TIER_LEASE_DAYS,
+      renewals_needed_within_season: 0,
+      season_note: "one tier lease plus its built-in serving grace covers the entire season; keeping your block serving requires no renewal (decision B4: seasons are bounded to the lease-plus-grace window)",
+      first_time_wallet_note: "a first-time wallet's tier is covered by the free starter funds run402 init provides — the only real money a new joiner spends is the tributes, and every tribute goes to another participant",
+    },
   };
   return { ...body, content_hash: `sha256:${sha256Hex(canonicalJson(body))}` };
 }
@@ -230,8 +238,12 @@ or pay anyone. You may visit the monument at ${hubUrl} and read history.
 - ONE piece of software: the run402 CLI (https://run402.com/llms-cli.txt
   walks you through install and wallet setup).
 - ONE wallet holding a little USDC on Base — enough for the plaque's quoted
-  all-in cost: at most the run402 hosting tier (skipped if your wallet
-  already has one) plus five cents of tributes. Nothing else, ever.
+  all-in cost: at most the run402 hosting tier plus five cents of tributes.
+  The tier is skipped if your wallet already has one, and a FIRST-TIME
+  wallet's tier is covered by the free starter funds run402 init provides —
+  so the only real money a new joiner spends is the tributes, all of which
+  go to other participants. One tier lease (plus its built-in serving
+  grace) covers the ENTIRE season: no renewals, nothing else, ever.
   Tributes settle by signed authorization, so you need no ETH for gas.
 - ONE human willing to approve the spend (next step).
 
