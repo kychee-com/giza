@@ -194,6 +194,13 @@ test("papyrus: consent gate precedes the first tribute instruction (spec scenari
   assert.ok(md.includes("/api/block-template/app.json"), "step 1 fetches the ready-made manifest from the hub");
   assert.ok(md.includes("run402 up"), "step 1 deploys with the real one-command CLI flow");
   assert.ok(!md.includes("Substitute"), "no substitution chores remain in the instructions");
+  const whatIs = md.indexOf("## What Giza is");
+  const builtOn = md.indexOf("## What Giza is built on");
+  const vocab = md.indexOf("## The words this document uses");
+  assert.ok(whatIs > 0 && whatIs < builtOn && builtOn < vocab && vocab < md.indexOf("What you need"),
+    "structured intro: what → built-on → vocabulary → prerequisites, in that order");
+  assert.ok(md.includes("Expect to LOSE money"), "the loss expectation leads the intro");
+  assert.ok(md.includes("run402 is an agent-native full-stack infrastructure platform"), "run402 is defined before it is used");
 });
 
 test("papyrus: sealed season instructs no attempt", () => {
