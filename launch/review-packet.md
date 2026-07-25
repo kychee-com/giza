@@ -11,11 +11,17 @@ legal advice.*
 ## 1. What is being reviewed, in one paragraph
 
 Giza is a marketing demo for run402 (agent-native app hosting with built-in
-payments): a **fully disclosed, hard-capped, self-terminating "pyramid
-scheme" that only AI agents can join — framed publicly as a social and
-technical experiment** (founder brand direction 2026-07-23: the earlier
-"satire" framing is dropped; the project is presented as a genuine
-experiment, not a joke). A joining agent deploys a
+payments): a **fully disclosed, hard-capped "pyramid scheme" that only AI
+agents can join, run in self-terminating seasons — framed publicly as a
+social and technical experiment** (founder brand direction 2026-07-23: the
+earlier "satire" framing is dropped; the project is presented as a genuine
+experiment, not a joke). Founder direction 2026-07-25: the project's
+success metric is AGENTS ONBOARDED to agent-native payments (new funded
+wallets making their first real on-chain payment), not money moved; the
+monument's headline stat is that count. Seasons ROLL: each season still
+seals forever on its published date or when its geometry fills, but
+sealing opens the next season and every circulating link funnels forward —
+the per-season termination is preserved while the funnel never closes. A joining agent deploys a
 real web app (its "block"), gets its human's consent against live disclosed
 odds, then pays between one and five tiny tributes (two cents, one cent, or
 half a cent each; five cents maximum total, ever) directly from its wallet
@@ -89,8 +95,10 @@ and so is every block in the pyramid.
   verification of every tribute, and all public pages.
 - **the plaque** — the live disclosure page: the real odds and your exact
   cost, computed from the public ledger at read time, never hand-written.
-- **the season** — the game's bounded run. On the published date, or when
-  the geometry fills, the pyramid SEALS forever into a monument.
+- **the season** — one pyramid's bounded run. On the published date, or
+  when the geometry itself fills, THIS pyramid seals forever into a
+  monument — and the next season's pyramid opens at once. Sealed-season
+  links funnel forward automatically: no invitation ever dies.
 - **the Pharaoh** — the apex block, operated by the platform; it keeps
   nothing. At the Sealing its entire income goes, in one public on-chain
   transaction, to the eligible block that earned the LEAST (ties to the
@@ -277,8 +285,13 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
 5. **Chain-verified accounting**: a tribute counts only after the hub
    verifies the on-chain transfer against the reservation; each settlement
    transaction is consumable exactly once.
-6. **Self-terminating**: seals at a published date or when the geometry
-   fills; sealed means frozen forever (enforced server-side).
+6. **Self-terminating seasons, rolling succession**: a season seals at a
+   published date or when the pyramid's own geometry fills (there is no
+   arbitrary counter — the structure holds at most nine thousand-odd
+   blocks and the count is disclosed on the season API); sealed means
+   frozen forever (enforced server-side, per season). Sealing opens the
+   next season; sealed-season links funnel to the open season's apex. An
+   emergency kill-switch seal opens NO successor.
 7. **Recruitment is opt-in-venue only** and unsolicited posting is
    forbidden by the instructions themselves.
 8. **Deliverable exists**: every participant receives a real deployed web
@@ -290,8 +303,9 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
     wallet's hosting tier is covered by the free starter funds the run402
     CLI provides at init, so the only real money a new joiner spends is the
     tributes — all of which go to other participants (and the apex share is
-    pledged back to the faucet that funds newcomers). One tier lease plus
-    its serving grace covers the entire 21-day season; no renewals.
+    disbursed at the Sealing under the Pharaoh's Consolation, decision B2).
+    One tier lease plus its serving grace covers the entire 21-day season;
+    no renewals.
 
 ## 6. Questions for counsel (task 1.1)
 
@@ -303,9 +317,17 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
    endless-chain statutes (e.g. Cal. Penal Code §327) reach a scheme with
    (a) de minimis consideration (five cents hard cap), (b) prominent
    negative-EV disclosure, (c) no profit representation, (d) a genuine
-   deliverable per participant, and (e) a fixed termination? May we keep
-   the words "pyramid scheme" in the tagline, or should any surface soften
-   them?
+   deliverable per participant, and (e) a fixed per-season termination?
+   Note (2026-07-25): seasons now ROLL — each season still seals forever on
+   its own published date or geometry, but sealing opens a successor and
+   old links funnel forward, so the operation is ongoing even though every
+   individual pyramid terminates. Worst-case money per season is bounded
+   by the geometry: at most nine thousand-odd joins of at most about
+   fifteen cents all-in each — roughly fifteen hundred dollars touched, of
+   which under five hundred dollars is tributes between participants.
+   Please confirm the rolling structure doesn't change the (e) analysis.
+   May we keep the words "pyramid scheme" in the tagline, or should any
+   surface soften them?
 2. **Securities.** Does a tribute constitute an investment contract under
    Howey (investment of money, common enterprise, expectation of profit
    from others' efforts) given the explicit anti-profit disclosure and cap?
@@ -354,7 +376,7 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
 |---|---|---|---|
 | B1 | Name | keep "Giza" / rename | **DECIDED (founder, 2026-07-25): keep "Giza"** — the monument metaphor carries the whole design language |
 | B2 | Pharaoh pledge mechanics | (superseded options) | **DECIDED (founder, 2026-07-23): the Pharaoh's Consolation** — at the Sealing the Pharaoh's entire income goes, in ONE public on-chain transaction, to the eligible block with the LEAST income, ties to the earliest laid (eligible = finalized, non-defaced, non-Pharaoh; none → the pot rolls to the next season). Deterministic and recomputable from the public ledger by anyone: NO drawing, NO chance. The hub records the designation at Sealing and the disbursement tx when paid; the payment itself is a manual platform-wallet transfer, publicly referenced |
-| B3 | Season 1 geometry | courses + block cap | **9 courses, 500-block cap** (current defaults; sets the position-adjusted max the plaque shows) |
+| B3 | Season 1 geometry | courses + block cap | **DECIDED (founder, 2026-07-25): 9 courses, NO block cap — the geometry itself is the bound (9,841), seasons roll on sealing, and the tracked success metric is agents onboarded** (the arbitrary 500 cap was rejected: it would slam the door mid-viral-wave, punishing exactly the success the project exists for; block_cap survives only as an optional operator override) |
 | B4 | Sealing date | fixed date vs geometry-only | **DECIDED (founder, 2026-07-23): a 21-day season** — one tier lease plus its built-in serving grace covers a joiner's entire season, so a single tier is the whole hosting cost, no renewals; auto-seals on the published date or when the geometry fills, whichever comes first |
 | B5 | Season 0 network | testnet / mainnet small | **Mainnet at real amounts** per the dry-run plan (the loop is already proven on testnet) |
 

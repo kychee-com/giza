@@ -176,6 +176,20 @@ test("plaque: SQL-bridge string block_ids still land income on the right blocks"
   assert.equal(plaque.pct_blocks_at_zero_income, 0.5);
 });
 
+test("plaque: agents_onboarded_total counts distinct payers across the whole ledger", () => {
+  const season = { id: 1, state: "open", courses: 9, block_cap: null, disclosure_version: 1 };
+  const ledger = [
+    { block_id: 1, join_id: "join-2", amount_usd_micros: 20000, payer: "0xAAA1" },
+    { block_id: 2, join_id: "join-5", amount_usd_micros: 20000, payer: "0xaaa1" }, // same wallet, cased
+    { block_id: 1, join_id: "join-5", amount_usd_micros: 10000, payer: "0xBBB2" },
+    { block_id: 9, join_id: "join-old", amount_usd_micros: 5000, payer: "0xCCC3" }, // a prior season's row
+  ];
+  const plaque = computePlaque({ blocks: FIXTURE, ledger, season });
+  assert.equal(plaque.agents_onboarded_total, 3, "case-insensitive distinct payers, all seasons");
+  const bare = computePlaque({ blocks: FIXTURE, ledger: [], season });
+  assert.equal(bare.agents_onboarded_total, 0);
+});
+
 test("papyrus: consent gate precedes the first tribute instruction (spec scenario)", () => {
   const md = renderPapyrus({ hubUrl: "https://giza.example", sponsorBlockId: 7, seasonState: "open", generatedAt: "2026-07-23T00:00:00Z", disclosureVersion: 1 });
   const consentAt = md.indexOf("CONSENT GATE");
@@ -203,10 +217,12 @@ test("papyrus: consent gate precedes the first tribute instruction (spec scenari
   assert.ok(md.includes("run402 is an agent-native full-stack infrastructure platform"), "run402 is defined before it is used");
 });
 
-test("papyrus: sealed season instructs no attempt", () => {
+test("papyrus: sealed season instructs no attempt AND funnels to the open season", () => {
   const md = renderPapyrus({ hubUrl: "https://giza.example", sponsorBlockId: 7, seasonState: "sealed", generatedAt: "2026-07-23T00:00:00Z", disclosureVersion: 1 });
   assert.ok(md.includes("SEALED"));
   assert.ok(!md.includes("run402 pay"), "a sealed papyrus contains no payment instructions");
+  assert.ok(md.includes("/blocks/pharaoh/skill.md"), "rolling seasons: a sealed papyrus points at the open season's instructions");
+  assert.ok(md.includes("Giza continues"), "the handoff is stated, not implied");
 });
 
 test("no-hand-authored-numbers: papyrus, both sites, and ALL launch copy carry no literal money figures", () => {
@@ -273,6 +289,17 @@ test("auto-seal: date passing or geometry cap seals; sealed seasons never re-sea
   assert.equal(seasonShouldAutoSeal(open, 10, before), true);
   assert.equal(seasonShouldAutoSeal({ ...open, seal_date: null }, 9, before), false);
   assert.equal(seasonShouldAutoSeal({ ...open, state: "sealed" }, 99, after), false);
+});
+
+test("revised B3: the geometry itself is the cap; block_cap is only an override", async () => {
+  const { geometryCapacity } = await import("../hub/function.mjs");
+  assert.equal(geometryCapacity(9), 9841, "nine ternary courses hold 9,841 blocks");
+  assert.equal(geometryCapacity(1), 1, "a one-course pyramid is just the apex");
+  assert.equal(geometryCapacity(undefined), Infinity, "unknown geometry never seals on count");
+  const noCap = { state: "open", seal_date: null, block_cap: null, courses: 9 };
+  assert.equal(seasonShouldAutoSeal(noCap, 9840, 0), false, "one short of full geometry stays open");
+  assert.equal(seasonShouldAutoSeal(noCap, 9841, 0), true, "full geometry seals — the pyramid is complete");
+  assert.equal(seasonShouldAutoSeal({ ...noCap, block_cap: 100 }, 100, 0), true, "an operator override still binds when set");
 });
 
 test("consolation designee: least income wins, ties to earliest laid; chambers/defaced/pharaoh excluded", async () => {

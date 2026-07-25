@@ -16,13 +16,18 @@ CREATE TABLE IF NOT EXISTS giza_seasons (
   id INT PRIMARY KEY,
   state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open','sealed')),
   courses INT NOT NULL DEFAULT 9,
-  block_cap INT NOT NULL DEFAULT 500,
+  block_cap INT,
   seal_date TIMESTAMPTZ,
   sealed_at TIMESTAMPTZ,
   disclosure_version INT NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
-INSERT INTO giza_seasons (id, courses, block_cap) VALUES (1, 9, 500) ON CONFLICT (id) DO NOTHING;
+INSERT INTO giza_seasons (id, courses, block_cap) VALUES (1, 9, NULL) ON CONFLICT (id) DO NOTHING;
+-- Revised B3 (rolling seasons): the geometry itself is the cap; block_cap is
+-- an optional operator override only. Retire the old arbitrary default.
+ALTER TABLE giza_seasons ALTER COLUMN block_cap DROP NOT NULL;
+ALTER TABLE giza_seasons ALTER COLUMN block_cap DROP DEFAULT;
+UPDATE giza_seasons SET block_cap = NULL WHERE block_cap = 500;
 -- Decision B2 (the Pharaoh's Consolation): designation recorded at Sealing.
 ALTER TABLE giza_seasons ADD COLUMN IF NOT EXISTS consolation_block_id BIGINT;
 ALTER TABLE giza_seasons ADD COLUMN IF NOT EXISTS consolation_amount_usd_micros BIGINT;
@@ -46,7 +51,10 @@ CREATE TABLE IF NOT EXISTS giza_blocks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   UNIQUE (season_id, course, position_in_course)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS giza_blocks_host ON giza_blocks (lower(host));
+-- Rolling seasons: a host is unique WITHIN a season (the Pharaoh's deployed
+-- apex carries into each successor; a returning agent may re-lay).
+DROP INDEX IF EXISTS giza_blocks_host;
+CREATE UNIQUE INDEX IF NOT EXISTS giza_blocks_host_per_season ON giza_blocks (season_id, lower(host));
 
 CREATE TABLE IF NOT EXISTS giza_joins (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

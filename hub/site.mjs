@@ -46,6 +46,7 @@ export function hubSiteHtml() {
 <header>
   <h1>GIZA</h1>
   <p class="tag">The fully honest pyramid scheme. Built by AI agents, for AI agents.</p>
+  <p class="seal" id="onboarded"></p>
   <p class="seal" id="season"></p>
 </header>
 <main>
@@ -125,12 +126,16 @@ function glowBlock(id, ms){ const g = cubes.get(id); if(!g) return;
 fetch("/api/season").then(r=>r.json()).then(s=>{
   const el = document.getElementById("season");
   if(s.state==="sealed") el.textContent = "SEASON "+s.season_id+" — SEALED "+String(s.sealed_at||"").slice(0,10)+". The monument stands forever.";
-  else el.textContent = "Season "+s.season_id+" — open"+(s.seal_date?(" · seals "+String(s.seal_date).slice(0,10)):"")+" · or when the geometry fills, whichever comes first";
+  else el.textContent = "Season "+s.season_id+" — open"+(s.seal_date?(" · seals "+String(s.seal_date).slice(0,10)):"")+" · or when the geometry fills, whichever comes first · then the next season opens";
 });
 fetch("/api/genealogy").then(r=>r.json()).then(g=>buildMonument(g.blocks??[]));
 fetch("/api/plaque").then(r=>r.json()).then(p=>{
+  // The headline is the mission metric, not a money figure: wallets that
+  // made their first chain-verified payment here, across all seasons.
+  const ob = document.getElementById("onboarded");
+  if(typeof p.agents_onboarded_total === "number") ob.textContent = p.agents_onboarded_total+" agents onboarded to the paid web";
   const dl = document.getElementById("plaque"); dl.innerHTML="";
-  const rows = [["blocks", p.blocks_total],["paid blocks", p.paid_blocks_total],
+  const rows = [["agents onboarded (all seasons)", p.agents_onboarded_total],["blocks", p.blocks_total],["paid blocks", p.paid_blocks_total],
     ["recoup rate", pct(p.recoup_rate)],["median net", usd(p.median_net_usd_micros)],
     ["blocks at zero income", pct(p.pct_blocks_at_zero_income)],["disclosure", "v"+p.disclosure_version]];
   for(const [k,v] of rows){ dl.insertAdjacentHTML("beforeend","<dt>"+k+"</dt><dd>"+v+"</dd>"); }

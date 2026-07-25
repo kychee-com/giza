@@ -30,7 +30,7 @@ export const ROUTE_FOR_AMOUNT = { 20000: "/tribute/2c", 10000: "/tribute/1c", 50
 export const TIER_USD_MICROS = 100_000; // run402 prototype tier
 export const TIER_LEASE_DAYS = 7;       // ...as a 7-day lease; +14d serving grace = the 21-day season (decision B4)
 export const PAPYRUS_TEMPLATE_VERSION = "1.0";
-export const EVENT_TYPES = ["tribute_settled", "block_laid", "block_defaced", "block_restored", "chamber_recorded", "season_sealed", "consolation_designated", "consolation_paid"];
+export const EVENT_TYPES = ["tribute_settled", "block_laid", "block_defaced", "block_restored", "chamber_recorded", "season_sealed", "season_opened", "consolation_designated", "consolation_paid"];
 const SIG_WINDOW_MS = 10 * 60 * 1000;
 const JOIN_TTL_MS = 2 * 60 * 60 * 1000;       // soft/hard reservation window
 const JOIN_TTL_MAX_MS = 24 * 60 * 60 * 1000;  // renewal ceiling from creation
@@ -145,6 +145,9 @@ export function computePlaque({ blocks, ledger, season, parentBlockId = null, wa
     if (blockId != null) income.set(blockId, (income.get(blockId) ?? 0) + Number(row.amount_usd_micros));
     if (row.join_id) spentByJoin.set(row.join_id, (spentByJoin.get(row.join_id) ?? 0) + Number(row.amount_usd_micros));
   }
+  // The mission metric: distinct wallets that made ≥1 chain-verified payment,
+  // across ALL seasons (the ledger is cumulative). This is the headline.
+  const agentsOnboarded = new Set(ledger.map((r) => (r.payer ? String(r.payer).toLowerCase() : null)).filter(Boolean));
   const paidBlocks = blocks.filter((b) => b.join_id && spentByJoin.has(b.join_id));
   const nets = paidBlocks.map((b) => (income.get(b.id) ?? 0) - spentByJoin.get(b.join_id)).sort((a, b) => a - b);
   const zeroCount = paidBlocks.filter((b) => (income.get(b.id) ?? 0) === 0).length;
@@ -186,6 +189,7 @@ export function computePlaque({ blocks, ledger, season, parentBlockId = null, wa
     disclosure_version: season.disclosure_version,
     season: { id: season.id, state: season.state, courses: season.courses, block_cap: season.block_cap },
     network: NET.chainId,
+    agents_onboarded_total: agentsOnboarded.size,
     blocks_total: blocks.length,
     paid_blocks_total: paidBlocks.length,
     recoup_rate: paidBlocks.length ? recouped / paidBlocks.length : null,
@@ -261,8 +265,10 @@ and so is every block in the pyramid.
   verification of every tribute, and all public pages.
 - **the plaque** — the live disclosure page: the real odds and your exact
   cost, computed from the public ledger at read time, never hand-written.
-- **the season** — the game's bounded run. On the published date, or when
-  the geometry fills, the pyramid SEALS forever into a monument.
+- **the season** — one pyramid's bounded run. On the published date, or
+  when the geometry itself fills, THIS pyramid seals forever into a
+  monument — and the next season's pyramid opens at once. Sealed-season
+  links funnel forward automatically: no invitation ever dies.
 - **the Pharaoh** — the apex block, operated by the platform; it keeps
   nothing. At the Sealing its entire income goes, in one public on-chain
   transaction, to the eligible block that earned the LEAST (ties to the
@@ -270,8 +276,12 @@ and so is every block in the pyramid.
 ${sealed ? `
 ## THE SEASON IS SEALED
 
-The monument is complete and frozen. Do NOT attempt to join, deploy a block,
-or pay anyone. You may visit the monument at ${hubUrl} and read history.
+This season's monument is complete and frozen. Do NOT attempt to join it,
+deploy a block into it, or pay anyone under this document. A season only
+ends; Giza continues: GET ${hubUrl}/api/season for the currently open
+season, and fetch ITS canonical instructions at
+${hubUrl}/blocks/pharaoh/skill.md. You may visit the sealed monument at
+${hubUrl} and read history.
 ` : `
 ## What you need — the complete list
 
@@ -442,12 +452,21 @@ export function chooseConsolationDesignee(blocks, incomeMap) {
     .sort((x, y) => x.income - y.income || new Date(x.b.created_at) - new Date(y.b.created_at) || x.b.id - y.b.id)[0].b;
 }
 
-/** 4.8 auto-seal predicate: published date passed OR geometry cap reached. */
+/** The pyramid's own shape is the cap: sum of 3^c over courses 0..courses-1.
+ *  Non-finite courses → unbounded (never seals on count alone). */
+export function geometryCapacity(courses) {
+  const n = Number(courses);
+  return Number.isFinite(n) && n > 0 ? (3 ** n - 1) / 2 : Infinity;
+}
+
+/** 4.8 auto-seal predicate: published date passed OR the structure filled.
+ *  Revised B3: the geometry itself is the cap; block_cap is only an optional
+ *  operator override (NULL by default — success is never punished). */
 export function seasonShouldAutoSeal(season, blocksTotal, nowMs = 0) {
   if (season.state !== "open") return false;
   if (season.seal_date && nowMs >= new Date(season.seal_date).getTime()) return true;
-  if (season.block_cap != null && blocksTotal >= Number(season.block_cap)) return true;
-  return false;
+  const cap = Math.min(season.block_cap != null ? Number(season.block_cap) : Infinity, geometryCapacity(season.courses));
+  return blocksTotal >= cap;
 }
 
 const esc = (s) => String(s ?? "").replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -602,6 +621,13 @@ function adminAuthorized(req) {
 
 async function loadSeason() {
   const rows = await sql("SELECT * FROM giza_seasons ORDER BY id DESC LIMIT 1");
+  return rows[0];
+}
+/** Join- and block-scoped surfaces resolve their OWN season, never the
+ *  latest — a sealed season's freeze must bind its joins even after the
+ *  successor opens. */
+async function loadSeasonById(id) {
+  const rows = await sql("SELECT * FROM giza_seasons WHERE id = $1", [Number(id)]);
   return rows[0];
 }
 /** BIGINT columns come back from the SQL bridge as strings — normalize once
@@ -905,9 +931,46 @@ async function finalizeJoin(join, hubUrl) {
 }
 
 // ── route handlers ────────────────────────────────────────────────────────
+/** Rolling seasons: sealing is a handoff, not a wall. The successor carries
+ *  the geometry, disclosure, season length (previous seal_date − created_at),
+ *  and the Pharaoh (same deployed apex, a new block row) so every circulating
+ *  link keeps converting. Idempotent via ON CONFLICT guards. */
+async function openSuccessorSeason(prev) {
+  const created = await sql(
+    `INSERT INTO giza_seasons (id, courses, block_cap, seal_date, disclosure_version)
+     SELECT id + 1, courses, block_cap,
+            clock_timestamp() + COALESCE(seal_date - created_at, INTERVAL '21 days'),
+            disclosure_version
+       FROM giza_seasons WHERE id = $1
+     ON CONFLICT (id) DO NOTHING
+     RETURNING id, courses, seal_date`,
+    [prev.id]);
+  if (!created.length) return null;
+  const next = created[0];
+  const pharaoh = await sql(
+    `INSERT INTO giza_blocks (season_id, course, position_in_course, dynasty, owner_wallet, payout_wallet, base_url, host, inscription, is_pharaoh)
+     SELECT $2, 0, 0, dynasty, owner_wallet, payout_wallet, base_url, host, inscription, true
+       FROM giza_blocks WHERE season_id = $1 AND is_pharaoh
+      ORDER BY id LIMIT 1
+     ON CONFLICT (season_id, course, position_in_course) DO NOTHING
+     RETURNING id`,
+    [prev.id, Number(next.id)]);
+  const info = {
+    season_id: Number(next.id),
+    previous_season_id: Number(prev.id),
+    pharaoh_block_id: pharaoh.length ? Number(pharaoh[0].id) : null,
+    courses: Number(next.courses),
+    seal_date: next.seal_date,
+  };
+  await appendEvent("season_opened", String(next.id), info);
+  return info;
+}
+
 /** Shared Sealing routine (admin kill switch AND auto-seal). Idempotent —
- *  the state='open' guard makes concurrent sealers converge. */
-async function sealSeason(season) {
+ *  the state='open' guard makes concurrent sealers converge. openNext
+ *  distinguishes the natural end (succession) from the emergency kill
+ *  switch (full stop, no successor). */
+async function sealSeason(season, { openNext = false } = {}) {
   const flipped = await sql(
     "UPDATE giza_seasons SET state = 'sealed', sealed_at = clock_timestamp() WHERE id = $1 AND state = 'open' RETURNING id",
     [season.id]);
@@ -940,7 +1003,8 @@ async function sealSeason(season) {
   await appendEvent("season_sealed", String(season.id), {
     season_id: season.id, unfinished_chambers: chambers.length, consolation,
   });
-  return { season_id: season.id, state: "sealed", unfinished_chambers: chambers.length, consolation };
+  const successor = openNext ? await openSuccessorSeason(season) : null;
+  return { season_id: season.id, state: "sealed", unfinished_chambers: chambers.length, consolation, successor };
 }
 
 /** Lazy auto-seal (4.8): the published date passing or the geometry cap
@@ -950,7 +1014,7 @@ async function loadSeasonAutoSealing() {
   if (season.state === "open") {
     const count = await sql("SELECT COUNT(*)::int AS n FROM giza_blocks WHERE season_id = $1", [season.id]);
     if (seasonShouldAutoSeal(season, Number(count[0].n), Date.now())) {
-      await sealSeason(season);
+      await sealSeason(season, { openNext: true }); // natural end → succession
       season = await loadSeason();
     }
   }
@@ -961,22 +1025,33 @@ async function handleSoftQuote(req, hubUrl) {
   const season = await loadSeasonAutoSealing();
   if (season.state === "sealed") return err(410, "SEASON_SEALED", "the season is sealed; the monument is frozen", { monument: hubUrl });
   const body = await req.json().catch(() => ({}));
-  const sponsorId = Number(body.sponsor_block_id);
+  let sponsorId = Number(body.sponsor_block_id);
   if (!Number.isInteger(sponsorId)) return err(400, "INVALID_SPONSOR", "sponsor_block_id must be a block id");
   const auth = await verifyPayerSignature(req, "join", "new", 0, null);
   if (!auth.ok) return err(401, "PAYER_SIGNATURE_INVALID", auth.reason);
 
   const blocks = await loadBlocks(season.id);
   const byId = new Map(blocks.map((b) => [b.id, b]));
-  const sponsor = byId.get(sponsorId);
-  if (!sponsor) return err(404, "SPONSOR_NOT_FOUND", "no such sponsor block");
+  let sponsor = byId.get(sponsorId);
+  let sponsorRemappedFrom = null;
+  if (!sponsor) {
+    // No link ever dead-ends: a sponsor laid in a prior (sealed) season
+    // funnels the joiner to the open season's apex — conversion outlives
+    // attribution.
+    const past = await sql("SELECT id FROM giza_blocks WHERE id = $1", [sponsorId]);
+    const apex = blocks.find((b) => b.is_pharaoh);
+    if (!past.length || !apex) return err(404, "SPONSOR_NOT_FOUND", "no such sponsor block");
+    sponsorRemappedFrom = sponsorId;
+    sponsorId = apex.id;
+    sponsor = apex;
+  }
   if (sponsor.defaced) return err(409, "SPONSOR_DEFACED", "the sponsor block is defaced; choose another lineage");
 
   const load = await combinedLoad(season.id);
   const estimate = choosePlacement({ blocks, load, sponsorId, seasonCourses: season.courses, blockCap: season.block_cap });
   if (estimate.code) return err(409, estimate.code, "no open slot is available in this dynasty or season");
   const plan = tributePlan(byId, estimate.parent_block_id);
-  const plaque = computePlaque({ blocks, ledger: await sql("SELECT block_id, join_id, amount_usd_micros FROM giza_ledger"), season, parentBlockId: estimate.parent_block_id });
+  const plaque = computePlaque({ blocks, ledger: await sql("SELECT block_id, join_id, amount_usd_micros, payer FROM giza_ledger"), season, parentBlockId: estimate.parent_block_id });
   const capability = randomBytes(24).toString("hex");
   const softQuote = {
     estimated_parent_block_id: estimate.parent_block_id,
@@ -991,11 +1066,18 @@ async function handleSoftQuote(req, hubUrl) {
      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, clock_timestamp() + make_interval(secs => $8)) RETURNING *`,
     [season.id, auth.payer, sponsorId, sha256Hex(capability), season.disclosure_version, plaque.content_hash, JSON.stringify(softQuote), JOIN_TTL_MS / 1000]);
   const view = await joinView(rows[0], hubUrl);
-  return ok({ ...view, capability, disclosure: { version: season.disclosure_version, plaque_url: `${hubUrl}/api/plaque?sponsor=${sponsorId}` } }, { status: 201 });
+  return ok({
+    ...view, capability,
+    disclosure: { version: season.disclosure_version, plaque_url: `${hubUrl}/api/plaque?sponsor=${sponsorId}` },
+    ...(sponsorRemappedFrom != null ? {
+      sponsor_remapped_from: sponsorRemappedFrom,
+      sponsor_remap_note: "your sponsor's season is sealed; this join proceeds under the open season's apex",
+    } : {}),
+  }, { status: 201 });
 }
 
 async function handleAttachBlock(body, join, hubUrl) {
-  const season = await loadSeason();
+  const season = await loadSeasonById(join.season_id);
   if (season.state === "sealed") return err(410, "SEASON_SEALED", "the season is sealed");
   const revision = Number(body.revision);
   if (revision !== join.revision) return staleRevision(join);
@@ -1058,7 +1140,7 @@ async function handleAttachBlock(body, join, hubUrl) {
     pay_to: ancestor.payout_wallet,
     tribute_url: `${ancestor.base_url}${ROUTE_FOR_AMOUNT[TRIBUTE_SCHEDULE[i]]}`,
   }));
-  const ledger = await sql("SELECT block_id, join_id, amount_usd_micros FROM giza_ledger");
+  const ledger = await sql("SELECT block_id, join_id, amount_usd_micros, payer FROM giza_ledger");
   const plaque = computePlaque({ blocks, ledger, season, parentBlockId: placement.parent_block_id });
   const tributesTotal = plan.reduce((s, p) => s + p.amount_usd_micros, 0);
   const hardQuote = {
@@ -1098,7 +1180,7 @@ async function handleAttachBlock(body, join, hubUrl) {
 }
 
 async function handleAccept(body, join, hubUrl) {
-  const season = await loadSeason();
+  const season = await loadSeasonById(join.season_id);
   if (season.state === "sealed") return err(410, "SEASON_SEALED", "the season is sealed");
   if (Number(body.revision) !== join.revision) return staleRevision(join);
   if (!["reserved", "halted_reconsent"].includes(join.state)) {
@@ -1120,7 +1202,7 @@ async function handleAttachPayment(body, join, hubUrl) {
   // Monument freeze: after Sealing no join may advance — a partially paid
   // join is an unfinished chamber forever (its settled tributes stay in the
   // public ledger; the sealed papyrus told the joiner not to pay).
-  const sealedSeason = await loadSeason();
+  const sealedSeason = await loadSeasonById(join.season_id);
   if (sealedSeason.state === "sealed") {
     return err(410, "SEASON_SEALED", "the season sealed; this join is preserved as an unfinished chamber and cannot advance");
   }
@@ -1386,12 +1468,20 @@ export default async (req) => {
     m = /^\/blocks\/by-host\/([^/]+)\/skill\.md$/.exec(path);
     if (m && method === "GET") {
       const season = await loadSeason();
-      const rows = await sql(
-        "SELECT id FROM giza_blocks WHERE lower(host) = lower($1) UNION ALL (SELECT id FROM giza_blocks WHERE is_pharaoh) LIMIT 1",
+      let rows = await sql(
+        "SELECT id, season_id FROM giza_blocks WHERE lower(host) = lower($1) ORDER BY season_id DESC, id DESC LIMIT 1",
         [decodeURIComponent(m[1])]);
+      if (!rows.length) rows = await sql("SELECT id, season_id FROM giza_blocks WHERE is_pharaoh ORDER BY season_id DESC, id DESC LIMIT 1");
       if (!rows.length) return err(404, "NOT_FOUND", "no blocks exist yet");
+      let sponsorBlockId = Number(rows[0].id);
+      // Funnel: a sealed-season block's link renders the OPEN season's
+      // papyrus under its apex — shared links never dead-end.
+      if (Number(rows[0].season_id) !== Number(season.id) && season.state === "open") {
+        const apex = await sql("SELECT id FROM giza_blocks WHERE season_id = $1 AND is_pharaoh LIMIT 1", [season.id]);
+        if (apex.length) sponsorBlockId = Number(apex[0].id);
+      }
       const markdown = renderPapyrus({
-        hubUrl, sponsorBlockId: Number(rows[0].id), seasonState: season.state,
+        hubUrl, sponsorBlockId, seasonState: season.state,
         generatedAt: new Date().toISOString(), disclosureVersion: season.disclosure_version,
       });
       return new Response(markdown, { headers: { "content-type": "text/markdown; charset=utf-8", "access-control-allow-origin": "*" } });
@@ -1403,13 +1493,18 @@ export default async (req) => {
       const season = await loadSeason();
       let sponsorId = m[1];
       if (sponsorId === "pharaoh") {
-        const rows = await sql("SELECT id FROM giza_blocks WHERE is_pharaoh LIMIT 1");
+        const rows = await sql("SELECT id FROM giza_blocks WHERE is_pharaoh ORDER BY season_id DESC, id DESC LIMIT 1");
         if (!rows.length) return err(404, "NOT_FOUND", "no pharaoh yet");
         sponsorId = Number(rows[0].id);
       } else {
         sponsorId = Number(sponsorId);
-        const rows = await sql("SELECT id FROM giza_blocks WHERE id = $1", [sponsorId]);
+        const rows = await sql("SELECT id, season_id FROM giza_blocks WHERE id = $1", [sponsorId]);
         if (!rows.length) return err(404, "NOT_FOUND", "no such sponsor block");
+        // Funnel: sealed-season sponsor link → the open season's apex.
+        if (Number(rows[0].season_id) !== Number(season.id) && season.state === "open") {
+          const apex = await sql("SELECT id FROM giza_blocks WHERE season_id = $1 AND is_pharaoh LIMIT 1", [season.id]);
+          if (apex.length) sponsorId = Number(apex[0].id);
+        }
       }
       const markdown = renderPapyrus({
         hubUrl, sponsorBlockId: sponsorId, seasonState: season.state,
@@ -1467,7 +1562,7 @@ export default async (req) => {
     if (path === "/api/plaque" && method === "GET") {
       const season = await loadSeason();
       const blocks = await loadBlocks(season.id);
-      const ledger = await sql("SELECT block_id, join_id, amount_usd_micros FROM giza_ledger");
+      const ledger = await sql("SELECT block_id, join_id, amount_usd_micros, payer FROM giza_ledger");
       const sponsorParam = url.searchParams.get("sponsor") ?? url.searchParams.get("parent");
       let parentBlockId = null;
       if (sponsorParam != null) {
@@ -1511,18 +1606,20 @@ export default async (req) => {
       const season = await loadSeasonAutoSealing();
       return ok({
         season_id: season.id, state: season.state, courses: season.courses,
-        block_cap: Number(season.block_cap), seal_date: season.seal_date, sealed_at: season.sealed_at,
+        block_cap: season.block_cap == null ? null : Number(season.block_cap),
+        geometry_capacity: geometryCapacity(season.courses),
+        seal_date: season.seal_date, sealed_at: season.sealed_at,
       });
     }
 
     m = /^\/api\/blocks\/(\d+)\/capstone$/.exec(path);
     if (m && method === "GET") {
-      const season = await loadSeason();
+      const rows = await sql("SELECT * FROM giza_blocks WHERE id = $1", [Number(m[1])]);
+      if (!rows.length) return err(404, "BLOCK_NOT_FOUND", "no such block");
+      const season = await loadSeasonById(rows[0].season_id); // the block's OWN season
       if (season.state !== "sealed") {
         return err(409, "SEASON_NOT_SEALED", "capstone certificates are issued at the Sealing; the monument is still being built");
       }
-      const rows = await sql("SELECT * FROM giza_blocks WHERE id = $1", [Number(m[1])]);
-      if (!rows.length) return err(404, "BLOCK_NOT_FOUND", "no such block");
       const stats = await sql(
         "SELECT COUNT(*)::int AS n, COALESCE(SUM(amount_usd_micros),0)::bigint AS total FROM giza_ledger WHERE block_id = $1",
         [Number(m[1])]);
@@ -1537,7 +1634,7 @@ export default async (req) => {
 
     m = /^\/api\/blocks\/by-host\/([^/]+)$/.exec(path);
     if (m && method === "GET") {
-      const rows = await sql("SELECT * FROM giza_blocks WHERE lower(host) = lower($1)", [decodeURIComponent(m[1])]);
+      const rows = await sql("SELECT * FROM giza_blocks WHERE lower(host) = lower($1) ORDER BY season_id DESC, id DESC LIMIT 1", [decodeURIComponent(m[1])]);
       if (!rows.length) return err(404, "BLOCK_NOT_FOUND", "no block registered for that host");
       return ok(publicBlock(rows[0], await incomeByBlock()));
     }
@@ -1551,19 +1648,30 @@ export default async (req) => {
 
     m = /^\/api\/blocks\/(\d+)\/lineage$/.exec(path);
     if (m && method === "GET") {
-      const season = await loadSeason();
+      const found = await sql("SELECT season_id FROM giza_blocks WHERE id = $1", [Number(m[1])]);
+      if (!found.length) return err(404, "BLOCK_NOT_FOUND", "no such block");
+      const season = await loadSeasonById(found[0].season_id); // the block's OWN season
       const blocks = await loadBlocks(season.id);
       const byId = new Map(blocks.map((b) => [b.id, b]));
       const block = byId.get(Number(m[1]));
       if (!block) return err(404, "BLOCK_NOT_FOUND", "no such block");
       const load = await combinedLoad(season.id);
       const plan = tributePlan(byId, block.id);
+      // A sealed block's page still recruits: point at the open season.
+      let openSeason = null;
+      if (season.state === "sealed") {
+        const latest = await loadSeason();
+        if (latest && latest.state === "open") {
+          openSeason = { season_id: Number(latest.id), papyrus: `${hubUrl}/blocks/pharaoh/skill.md`, join: `${hubUrl}/api/joins` };
+        }
+      }
       return ok({
         block: publicBlock(block),
         season_state: season.state,
         open_slots: Math.max(0, 3 - (load.get(block.id) ?? 0)),
         prospective_tribute_plan: plan,
         join: season.state === "sealed" ? null : { method: "POST", url: `${hubUrl}/api/joins`, sponsor_block_id: Number(block.id) },
+        ...(openSeason ? { open_season: openSeason } : {}),
         papyrus: `${hubUrl}/blocks/${block.id}/skill.md`,
         plaque: `${hubUrl}/api/plaque?sponsor=${block.id}`,
       });
@@ -1635,7 +1743,7 @@ export default async (req) => {
 
     if (path === "/api/pledge" && method === "GET") {
       const season = await loadSeason();
-      const pharaoh = await sql("SELECT id FROM giza_blocks WHERE is_pharaoh LIMIT 1");
+      const pharaoh = await sql("SELECT id FROM giza_blocks WHERE is_pharaoh AND season_id = $1 LIMIT 1", [season.id]);
       const total = pharaoh.length
         ? await sql("SELECT COALESCE(SUM(amount_usd_micros),0)::bigint AS total, COUNT(*)::int AS n FROM giza_ledger WHERE block_id = $1", [Number(pharaoh[0].id)])
         : [{ total: 0, n: 0 }];
@@ -1663,6 +1771,19 @@ export default async (req) => {
                 : null,
               pot_if_sealed_now_usd_micros: Number(total[0].total),
             },
+        // Rolling seasons: the latest SEALED designation stays public here
+        // even after the successor opens (until anyone can verify it paid).
+        ...(season.state !== "sealed" ? await (async () => {
+          const prev = await sql("SELECT * FROM giza_seasons WHERE state = 'sealed' ORDER BY id DESC LIMIT 1");
+          if (!prev.length) return {};
+          const prevPaid = await sql("SELECT payload FROM giza_events WHERE unique_key = $1", [`consolation_paid:${prev[0].id}`]);
+          return { previous_season_consolation: {
+            season_id: Number(prev[0].id),
+            block_id: prev[0].consolation_block_id == null ? null : Number(prev[0].consolation_block_id),
+            amount_usd_micros: prev[0].consolation_amount_usd_micros == null ? null : Number(prev[0].consolation_amount_usd_micros),
+            paid_transaction: prevPaid[0]?.payload?.transaction ?? null,
+          } };
+        })() : {}),
         ledger: pharaoh.length ? `/api/blocks/${Number(pharaoh[0].id)}/ledger` : null,
       });
     }
@@ -1672,9 +1793,9 @@ export default async (req) => {
       if (!adminAuthorized(req)) return err(401, "ADMIN_AUTH_REQUIRED", "hub service key required");
       const body = await req.json().catch(() => ({}));
       const base = new URL(body.base_url).origin;
-      const existing = await sql("SELECT id FROM giza_blocks WHERE is_pharaoh LIMIT 1");
-      if (existing.length) return ok({ block_id: Number(existing[0].id), already: true });
       const season = await loadSeason();
+      const existing = await sql("SELECT id FROM giza_blocks WHERE is_pharaoh AND season_id = $1 LIMIT 1", [season.id]);
+      if (existing.length) return ok({ block_id: Number(existing[0].id), already: true });
       const rows = await sql(
         `INSERT INTO giza_blocks (season_id, course, position_in_course, dynasty, owner_wallet, payout_wallet, base_url, host, inscription, is_pharaoh)
          VALUES ($1, 0, 0, 'pharaoh', $2, $3, $4, $5, $6, true) RETURNING id`,
@@ -1687,13 +1808,19 @@ export default async (req) => {
       if (!adminAuthorized(req)) return err(401, "ADMIN_AUTH_REQUIRED", "hub admin secret required");
       const season = await loadSeason();
       if (season.state === "sealed") return ok({ season_id: season.id, state: "sealed", already: true });
-      return ok(await sealSeason(season));
+      // Default is the emergency kill switch (no successor). Pass
+      // open_next: true for a deliberate handoff seal.
+      const body = await req.json().catch(() => ({}));
+      return ok(await sealSeason(season, { openNext: body.open_next === true }));
     }
 
     if (path === "/api/admin/consolation-paid" && method === "POST") {
       if (!adminAuthorized(req)) return err(401, "ADMIN_AUTH_REQUIRED", "hub admin secret required");
-      const season = await loadSeason();
-      if (season.state !== "sealed") return err(409, "SEASON_NOT_SEALED", "the Consolation is disbursed only after the Sealing");
+      // Rolling seasons: the disbursement targets the latest SEALED season
+      // (the successor may already be open when the operator pays).
+      const sealedRows = await sql("SELECT * FROM giza_seasons WHERE state = 'sealed' ORDER BY id DESC LIMIT 1");
+      const season = sealedRows[0];
+      if (!season) return err(409, "SEASON_NOT_SEALED", "the Consolation is disbursed only after the Sealing");
       if (season.consolation_block_id == null) return err(409, "NO_CONSOLATION_DESIGNEE", "this season sealed with no eligible designee");
       const body = await req.json().catch(() => ({}));
       const transaction = (body.transaction ?? "").toString().toLowerCase();
@@ -1721,6 +1848,10 @@ export default async (req) => {
       }
       for (const field of ["courses", "block_cap"]) {
         if (body[field] !== undefined) {
+          if (field === "block_cap" && body[field] === null) {
+            sets.push("block_cap = NULL"); // clear the override: geometry is the cap
+            continue;
+          }
           const value = Number(body[field]);
           if (!Number.isInteger(value) || value < 1) return err(400, "INVALID_GEOMETRY", `${field} must be a positive integer`);
           params.push(value);
@@ -1731,7 +1862,7 @@ export default async (req) => {
       const rows = await sql(`UPDATE giza_seasons SET ${sets.join(", ")} WHERE id = $1 AND state = 'open' RETURNING *`, params);
       if (!rows.length) return err(409, "SEASON_SEALED", "the season sealed concurrently");
       const s = rows[0];
-      return ok({ season_id: s.id, state: s.state, courses: s.courses, block_cap: Number(s.block_cap), seal_date: s.seal_date });
+      return ok({ season_id: s.id, state: s.state, courses: s.courses, block_cap: s.block_cap == null ? null : Number(s.block_cap), geometry_capacity: geometryCapacity(s.courses), seal_date: s.seal_date });
     }
 
     return err(404, "NOT_FOUND", "unknown hub route");
