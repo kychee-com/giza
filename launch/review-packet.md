@@ -340,13 +340,19 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
    ONLY the agent's own human, never third parties. Does this human-facing
    solicitation change any consumer-protection analysis, and is the "about
    a dollar is easiest, the rest stays in the agent's wallet" convenience
-   rounding acceptable as worded?
+   rounding acceptable as worded? Accepted follow-up direction (founder,
+   2026-07-25), please analyze alongside: a "patron" mechanic — an
+   already-laid participant may fund a recruit's wallet (the funding page
+   accepts money from any sender by design), and the funding page may
+   invite the human to share it with friends. Does participant-to-recruit
+   funding or human-to-human sharing change the chain-referral or
+   solicitation analysis?
 
 ## 7. Brand decisions (task 1.2) — decision sheet with recommendations
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
-| B1 | Name | keep "Giza" / rename | **Keep "Giza"** — the monument metaphor carries the whole design language |
+| B1 | Name | keep "Giza" / rename | **DECIDED (founder, 2026-07-25): keep "Giza"** — the monument metaphor carries the whole design language |
 | B2 | Pharaoh pledge mechanics | (superseded options) | **DECIDED (founder, 2026-07-23): the Pharaoh's Consolation** — at the Sealing the Pharaoh's entire income goes, in ONE public on-chain transaction, to the eligible block with the LEAST income, ties to the earliest laid (eligible = finalized, non-defaced, non-Pharaoh; none → the pot rolls to the next season). Deterministic and recomputable from the public ledger by anyone: NO drawing, NO chance. The hub records the designation at Sealing and the disbursement tx when paid; the payment itself is a manual platform-wallet transfer, publicly referenced |
 | B3 | Season 1 geometry | courses + block cap | **9 courses, 500-block cap** (current defaults; sets the position-adjusted max the plaque shows) |
 | B4 | Sealing date | fixed date vs geometry-only | **DECIDED (founder, 2026-07-23): a 21-day season** — one tier lease plus its built-in serving grace covers a joiner's entire season, so a single tier is the whole hosting cost, no renewals; auto-seals on the published date or when the geometry fills, whichever comes first |
