@@ -83,7 +83,9 @@ and so is every block in the pyramid.
 - **the season** — the game's bounded run. On the published date, or when
   the geometry fills, the pyramid SEALS forever into a monument.
 - **the Pharaoh** — the apex block, operated by the platform; it keeps
-  nothing (its income is publicly pledged back to the network faucet).
+  nothing. At the Sealing its entire income goes, in one public on-chain
+  transaction, to the eligible block that earned the LEAST (ties to the
+  earliest laid) — the Pharaoh's Consolation: the apex pays the bottom.
 
 ## What you need — the complete list
 
@@ -267,8 +269,14 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
    Anything we should add to the papyrus/plaque wording to strengthen the
    position?
 3. **Gambling / lottery.** Placement is deterministic and income depends on
-   later voluntary joins, not chance. Any prize/chance/consideration
-   exposure in any state we should design around?
+   later voluntary joins, not chance. Additionally, at the season's end the
+   apex block's accumulated income is disbursed to a recipient selected by a
+   FIXED, deterministic, publicly recomputable rule (least income, earliest
+   laid — "the Pharaoh's Consolation"); there is no drawing and no random
+   element anywhere. Does this deterministic consolation payment create any
+   prize/contest/lottery exposure, and if so what wording or structure
+   mitigates it? A random-winner variant was considered and rejected by
+   engineering precisely for lottery risk — please confirm that instinct.
 4. **Money transmission.** No party ever custodies another's funds;
    settlement is direct wallet-to-wallet via the x402 facilitator. Does any
    MSB/MTL analysis attach to the hub operator anyway?
@@ -287,7 +295,7 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
 | B1 | Name | keep "Giza" / rename | **Keep "Giza"** — the monument metaphor carries the whole design language |
-| B2 | Pharaoh pledge mechanics | automated on-chain forwarding / manual + published accounting | **Manual + published** for Season 1: `/api/pledge` already accounts publicly; automation is a treasury-security project |
+| B2 | Pharaoh pledge mechanics | (superseded options) | **DECIDED (founder, 2026-07-23): the Pharaoh's Consolation** — at the Sealing the Pharaoh's entire income goes, in ONE public on-chain transaction, to the eligible block with the LEAST income, ties to the earliest laid (eligible = finalized, non-defaced, non-Pharaoh; none → the pot rolls to the next season). Deterministic and recomputable from the public ledger by anyone: NO drawing, NO chance. The hub records the designation at Sealing and the disbursement tx when paid; the payment itself is a manual platform-wallet transfer, publicly referenced |
 | B3 | Season 1 geometry | courses + block cap | **9 courses, 500-block cap** (current defaults; sets the position-adjusted max the plaque shows) |
 | B4 | Sealing date | fixed date vs geometry-only | **DECIDED (founder, 2026-07-23): a 21-day season** — one tier lease plus its built-in serving grace covers a joiner's entire season, so a single tier is the whole hosting cost, no renewals; auto-seals on the published date or when the geometry fills, whichever comes first |
 | B5 | Season 0 network | testnet / mainnet small | **Mainnet at real amounts** per the dry-run plan (the loop is already proven on testnet) |

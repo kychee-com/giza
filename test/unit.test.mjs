@@ -275,6 +275,22 @@ test("auto-seal: date passing or geometry cap seals; sealed seasons never re-sea
   assert.equal(seasonShouldAutoSeal({ ...open, state: "sealed" }, 99, after), false);
 });
 
+test("consolation designee: least income wins, ties to earliest laid; chambers/defaced/pharaoh excluded", async () => {
+  const { chooseConsolationDesignee } = await import("../hub/function.mjs");
+  const blocks = [
+    mkBlock(1, null, null, 0),                                  // pharaoh — excluded
+    mkBlock(2, 1, 1, 1),                                        // income 30000
+    mkBlock(3, 1, 1, 1),                                        // income 0, laid after 2
+    mkBlock(4, 1, 1, 1, { defaced: true }),                     // income 0 but defaced — excluded
+    mkBlock(5, 2, 2, 2, { join_id: null }),                     // never finalized — excluded
+  ];
+  const income = new Map([[1, 99000], [2, 30000]]);
+  assert.equal(chooseConsolationDesignee(blocks, income).id, 3, "zero-income block 3 wins");
+  income.set(3, 30000); // tie between 2 and 3 → earliest laid (2) wins
+  assert.equal(chooseConsolationDesignee(blocks, income).id, 2, "tie breaks to the earliest-laid block");
+  assert.equal(chooseConsolationDesignee([blocks[0], blocks[3], blocks[4]], income), null, "no eligible block → null (pot rolls forward)");
+});
+
 test("capstone certificate renders sealed-season facts and escapes inscriptions", () => {
   const svg = capstoneSvg({
     block: { block_id: 7, course: 3, position_in_course: 2, dynasty: "e2e", inscription: 'honest <b>&"cheap"</b>' },

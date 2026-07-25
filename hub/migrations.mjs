@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS giza_seasons (
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 INSERT INTO giza_seasons (id, courses, block_cap) VALUES (1, 9, 500) ON CONFLICT (id) DO NOTHING;
+-- Decision B2 (the Pharaoh's Consolation): designation recorded at Sealing.
+ALTER TABLE giza_seasons ADD COLUMN IF NOT EXISTS consolation_block_id BIGINT;
+ALTER TABLE giza_seasons ADD COLUMN IF NOT EXISTS consolation_amount_usd_micros BIGINT;
 
 CREATE TABLE IF NOT EXISTS giza_blocks (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

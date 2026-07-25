@@ -29,7 +29,7 @@ export const ROUTE_FOR_AMOUNT = { 20000: "/tribute/2c", 10000: "/tribute/1c", 50
 export const TIER_USD_MICROS = 100_000; // run402 prototype tier
 export const TIER_LEASE_DAYS = 7;       // ...as a 7-day lease; +14d serving grace = the 21-day season (decision B4)
 export const PAPYRUS_TEMPLATE_VERSION = "1.0";
-export const EVENT_TYPES = ["tribute_settled", "block_laid", "block_defaced", "block_restored", "chamber_recorded", "season_sealed"];
+export const EVENT_TYPES = ["tribute_settled", "block_laid", "block_defaced", "block_restored", "chamber_recorded", "season_sealed", "consolation_designated", "consolation_paid"];
 const SIG_WINDOW_MS = 10 * 60 * 1000;
 const JOIN_TTL_MS = 2 * 60 * 60 * 1000;       // soft/hard reservation window
 const JOIN_TTL_MAX_MS = 24 * 60 * 60 * 1000;  // renewal ceiling from creation
@@ -263,7 +263,9 @@ and so is every block in the pyramid.
 - **the season** — the game's bounded run. On the published date, or when
   the geometry fills, the pyramid SEALS forever into a monument.
 - **the Pharaoh** — the apex block, operated by the platform; it keeps
-  nothing (its income is publicly pledged back to the network faucet).
+  nothing. At the Sealing its entire income goes, in one public on-chain
+  transaction, to the eligible block that earned the LEAST (ties to the
+  earliest laid) — the Pharaoh's Consolation: the apex pays the bottom.
 ${sealed ? `
 ## THE SEASON IS SEALED
 
@@ -395,6 +397,19 @@ export function courseSpeed(blocks) {
       span_seconds: rows.length >= 2 ? Math.round((times[times.length - 1] - times[0]) / 1000) : null,
     };
   });
+}
+
+export const CONSOLATION_RULE =
+  "At the Sealing, the Pharaoh's entire income goes in one public on-chain transaction to the eligible block with the LEAST income, ties broken to the earliest laid (then lowest id). Eligible = finalized, non-defaced, non-Pharaoh. If no eligible block exists, the pot rolls into the next season's Consolation.";
+
+/** Decision B2 — the Pharaoh's Consolation designee. Pure and deterministic:
+ *  no drawing, no chance; anyone can recompute it from the public ledger. */
+export function chooseConsolationDesignee(blocks, incomeMap) {
+  const eligible = blocks.filter((b) => b.join_id && !b.is_pharaoh && !b.defaced);
+  if (!eligible.length) return null;
+  return eligible
+    .map((b) => ({ b, income: incomeMap.get(b.id) ?? 0 }))
+    .sort((x, y) => x.income - y.income || new Date(x.b.created_at) - new Date(y.b.created_at) || x.b.id - y.b.id)[0].b;
 }
 
 /** 4.8 auto-seal predicate: published date passed OR geometry cap reached. */
@@ -877,8 +892,25 @@ async function sealSeason(season) {
       join_id: chamber.id, settled_positions: Number(chamber.settled_count), reserved_course: chamber.reserved_course,
     });
   }
-  await appendEvent("season_sealed", String(season.id), { season_id: season.id, unfinished_chambers: chambers.length });
-  return { season_id: season.id, state: "sealed", unfinished_chambers: chambers.length };
+  // Decision B2: designate the Pharaoh's Consolation — deterministic, public.
+  const blocks = await loadBlocks(season.id);
+  const income = await incomeByBlock();
+  const pharaoh = blocks.find((b) => b.is_pharaoh);
+  const pot = pharaoh ? (income.get(pharaoh.id) ?? 0) : 0;
+  const designee = chooseConsolationDesignee(blocks, income);
+  let consolation = null;
+  if (designee) {
+    await sql("UPDATE giza_seasons SET consolation_block_id = $2, consolation_amount_usd_micros = $3 WHERE id = $1",
+      [season.id, designee.id, pot]);
+    await appendEvent("consolation_designated", String(season.id), {
+      season_id: season.id, block_id: Number(designee.id), amount_usd_micros: pot, rule: CONSOLATION_RULE,
+    });
+    consolation = { block_id: Number(designee.id), amount_usd_micros: pot };
+  }
+  await appendEvent("season_sealed", String(season.id), {
+    season_id: season.id, unfinished_chambers: chambers.length, consolation,
+  });
+  return { season_id: season.id, state: "sealed", unfinished_chambers: chambers.length, consolation };
 }
 
 /** Lazy auto-seal (4.8): the published date passing or the geometry cap
@@ -1456,15 +1488,35 @@ export default async (req) => {
     }
 
     if (path === "/api/pledge" && method === "GET") {
+      const season = await loadSeason();
       const pharaoh = await sql("SELECT id FROM giza_blocks WHERE is_pharaoh LIMIT 1");
       const total = pharaoh.length
         ? await sql("SELECT COALESCE(SUM(amount_usd_micros),0)::bigint AS total, COUNT(*)::int AS n FROM giza_ledger WHERE block_id = $1", [Number(pharaoh[0].id)])
         : [{ total: 0, n: 0 }];
+      const blocks = await loadBlocks(season.id);
+      const income = await incomeByBlock();
+      const liveDesignee = chooseConsolationDesignee(blocks, income);
+      const paidRows = await sql("SELECT payload FROM giza_events WHERE unique_key = $1", [`consolation_paid:${season.id}`]);
       return ok({
-        pledge: "Every tribute the Pharaoh block receives is publicly accounted here and pledged back to the network faucet fund. The Pharaoh keeps nothing.",
+        pledge: "The Pharaoh keeps nothing. Every tribute it receives is publicly accounted here, and at the Sealing the entire pot is disbursed under the Consolation rule below — one public on-chain transaction, verifiable by anyone.",
+        consolation_rule: CONSOLATION_RULE,
         pharaoh_block_id: pharaoh.length ? Number(pharaoh[0].id) : null,
         received_usd_micros: Number(total[0].total),
         received_count: Number(total[0].n),
+        consolation: season.state === "sealed"
+          ? {
+              sealed: true,
+              block_id: season.consolation_block_id == null ? null : Number(season.consolation_block_id),
+              amount_usd_micros: season.consolation_amount_usd_micros == null ? null : Number(season.consolation_amount_usd_micros),
+              paid_transaction: paidRows[0]?.payload?.transaction ?? null,
+            }
+          : {
+              sealed: false,
+              designee_if_sealed_now: liveDesignee
+                ? { block_id: Number(liveDesignee.id), income_usd_micros: income.get(liveDesignee.id) ?? 0 }
+                : null,
+              pot_if_sealed_now_usd_micros: Number(total[0].total),
+            },
         ledger: pharaoh.length ? `/api/blocks/${Number(pharaoh[0].id)}/ledger` : null,
       });
     }
@@ -1490,6 +1542,23 @@ export default async (req) => {
       const season = await loadSeason();
       if (season.state === "sealed") return ok({ season_id: season.id, state: "sealed", already: true });
       return ok(await sealSeason(season));
+    }
+
+    if (path === "/api/admin/consolation-paid" && method === "POST") {
+      if (!adminAuthorized(req)) return err(401, "ADMIN_AUTH_REQUIRED", "hub admin secret required");
+      const season = await loadSeason();
+      if (season.state !== "sealed") return err(409, "SEASON_NOT_SEALED", "the Consolation is disbursed only after the Sealing");
+      if (season.consolation_block_id == null) return err(409, "NO_CONSOLATION_DESIGNEE", "this season sealed with no eligible designee");
+      const body = await req.json().catch(() => ({}));
+      const transaction = (body.transaction ?? "").toString().toLowerCase();
+      if (!/^0x[0-9a-f]{64}$/.test(transaction)) return err(400, "INVALID_TRANSACTION", "transaction must be the on-chain disbursement tx hash");
+      await appendEvent("consolation_paid", String(season.id), {
+        season_id: season.id,
+        block_id: Number(season.consolation_block_id),
+        amount_usd_micros: Number(season.consolation_amount_usd_micros ?? 0),
+        transaction,
+      });
+      return ok({ season_id: season.id, block_id: Number(season.consolation_block_id), transaction, recorded: true });
     }
 
     if (path === "/api/admin/season" && method === "POST") {
