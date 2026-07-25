@@ -29,12 +29,13 @@ export function buildHubBundle({ network = "testnet", adminSecretHash = "" } = {
     .replaceAll("__GIZA_BLOCK_MIGRATION_B64__", b64(BLOCK_MIGRATION));
   return {
     files: [{ file: "index.html", data: hubSiteHtml() }],
-    functions: [{ name: "hub", code, deps: ["viem"] }],
+    functions: [{ name: "hub", code, deps: ["viem", "qrcode"] }],
     migrations: HUB_MIGRATIONS,
     routes: {
       replace: [
         { pattern: "/api/*", methods: ["GET", "POST", "OPTIONS"], target: { type: "function", name: "hub" } },
         { pattern: "/blocks/*", methods: ["GET"], target: { type: "function", name: "hub" } },
+        { pattern: "/fund/*", methods: ["GET"], target: { type: "function", name: "hub" } },
       ],
     },
   };

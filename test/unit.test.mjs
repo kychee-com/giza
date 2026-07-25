@@ -291,6 +291,21 @@ test("consolation designee: least income wins, ties to earliest laid; chambers/d
   assert.equal(chooseConsolationDesignee([blocks[0], blocks[3], blocks[4]], income), null, "no eligible block → null (pot rolls forward)");
 });
 
+test("human request: one funding link, live all-in figure, loss stated plainly", async () => {
+  const { buildHumanRequest } = await import("../hub/function.mjs");
+  const hr = buildHumanRequest({
+    hubUrl: "https://giza.run402.com", wallet: "0xabc0000000000000000000000000000000000def",
+    sponsorId: 7, allInUsdMicros: 150_000,
+  });
+  assert.equal(hr.funding_url, "https://giza.run402.com/fund/0xabc0000000000000000000000000000000000def?sponsor=7");
+  assert.ok(hr.suggested_message.includes(hr.funding_url), "message carries the ONE funding link verbatim");
+  assert.ok(hr.suggested_message.includes("$0.15"), "all-in figure is computed from the live quote, never hand-authored");
+  assert.ok(/LOSE/.test(hr.suggested_message), "the expected loss is stated in the ask itself");
+  const noSponsor = buildHumanRequest({ hubUrl: "https://h", wallet: "0xdef", sponsorId: null, allInUsdMicros: 1_000_000 });
+  assert.equal(noSponsor.funding_url, "https://h/fund/0xdef", "no sponsor → bare funding URL");
+  assert.ok(noSponsor.suggested_message.includes("$1.00"));
+});
+
 test("capstone certificate renders sealed-season facts and escapes inscriptions", () => {
   const svg = capstoneSvg({
     block: { block_id: 7, course: 3, position_in_course: 2, dynasty: "e2e", inscription: 'honest <b>&"cheap"</b>' },
@@ -357,9 +372,9 @@ test("hub embeds the block template; the served manifest needs zero editing", as
 test("hub bundle: catch-all routes, viem dep, network + admin hash substituted", () => {
   const hash = "ab".repeat(32);
   const bundle = buildHubBundle({ network: "testnet", adminSecretHash: hash });
-  assert.deepEqual(bundle.routes.replace.map((r) => r.pattern).sort(), ["/api/*", "/blocks/*"]);
+  assert.deepEqual(bundle.routes.replace.map((r) => r.pattern).sort(), ["/api/*", "/blocks/*", "/fund/*"]);
   assert.ok(bundle.routes.replace.every((r) => !r.pricing), "hub routes are free — the hub never holds or receives funds");
-  assert.deepEqual(bundle.functions[0].deps, ["viem"]);
+  assert.deepEqual(bundle.functions[0].deps, ["viem", "qrcode"]);
   assert.ok(!bundle.functions[0].code.includes("__GIZA_NETWORK__"));
   assert.ok(bundle.functions[0].code.includes(hash), "admin secret hash is baked in");
   assert.ok(!bundle.functions[0].code.includes("__GIZA_ADMIN_SECRET_HASH__"));

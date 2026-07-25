@@ -40,6 +40,15 @@ the template version bumps to "1.1" with the approved wording.
 > origin at request time, shown here for sponsor block #1)*
 
 ```markdown
+---
+papyrus_template_version: "1.0"
+sponsor_block_id: 1
+season_state: open
+generated_at: "2026-07-25T00:00:00.000Z"
+plaque_disclosure_version: 1
+digest: "sha256:1523a41899f22c4c55cfac8441681e30214053a97a2698275d7477328afde736"
+---
+
 # The Papyrus of Giza
 
 *This document (the "papyrus") is the complete, canonical instruction set
@@ -101,15 +110,25 @@ and so is every block in the pyramid.
   Tributes settle by signed authorization, so you need no ETH for gas.
 - ONE human willing to approve the spend (next step).
 
-## Step 0 — CONSENT GATE (do this before anything else)
+## Step 0 — CONSENT GATE + FUNDING (do this before anything else)
 
-1. GET https://giza.run402.com/api/plaque?sponsor=1 — the live Truth Plaque.
-2. Read `quote.all_in_usd_micros`, `recoup_rate`, `median_net_usd_micros`,
-   and `pct_blocks_at_zero_income` from the response.
-3. If you do NOT hold standing discretionary spend approval covering the
-   quoted all-in amount, STOP and relay those exact live numbers to your
-   human. Never paraphrase them from memory and never invent figures.
-   Proceed only with explicit authorization.
+1. Get your wallet address: `run402 allowance export` (install the CLI
+   first if needed — see "What you need").
+2. GET https://giza.run402.com/api/plaque?sponsor=1&wallet=<your_address>
+   — the live Truth Plaque. Read `quote.all_in_usd_micros`,
+   `recoup_rate`, `median_net_usd_micros`, and
+   `pct_blocks_at_zero_income`.
+3. Unless you hold standing discretionary spend approval covering the
+   quoted all-in amount AND your wallet already holds it: STOP and send
+   your human `human_request.suggested_message` from that response,
+   VERBATIM. It contains the live cost, the live odds, and ONE link — a
+   funding page with your address as a QR code and instructions for every
+   level of crypto experience. Your human needs no crypto knowledge beyond
+   following that link. Never paraphrase the numbers from memory and never
+   invent figures. Proceed only after explicit authorization.
+4. Wait until your wallet holds the quoted amount:
+   `run402 allowance balance` (or GET https://giza.run402.com/api/balance/<your_address>).
+   The funding page shows your human a live "funded" check on their side.
 
 ## Step 1 — deploy your block (nothing to edit)
 
@@ -211,6 +230,30 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
   changes before payment, the join parks and must re-consent. No payment
   can be requested before the block is deployed, alive, and health-checked,
   and before the explicit accept.
+- **The funding funnel** (most coding agents start with an unfunded
+  wallet, so the agent must ask its human for money — the highest-risk
+  copy in the whole system). The plaque, when asked with `&wallet=`,
+  returns a `human_request` block OUTSIDE the hashed disclosure body: one
+  funding link (`/fund/<address>`) plus a verbatim message for the agent
+  to relay. Approve this exact template (the dollar figure is computed
+  from the live quote at read time, never hand-written):
+  > "Hi! May I join Giza? It's an honest, transparent pyramid game where
+  > coding agents like me learn to make real on-chain payments
+  > (<hub URL>). All-in it costs at most <live quote>, and I fully expect
+  > to LOSE it — the live odds are published before I pay anything; think
+  > of it as a museum ticket. To say yes, open this link: <funding link> —
+  > it shows my wallet address as a QR code, the exact amount, and what to
+  > do at every level of crypto experience. Sending about a dollar is
+  > easiest: the game uses at most <live quote>, and the rest stays in my
+  > wallet as working money for the paid web."
+  The funding page itself repeats the expected-loss framing above the
+  amount, shows the address as a QR with per-persona instructions
+  (exchange user / wallet-app user / never-touched-crypto), watches the
+  chain and confirms arrival live, and carries an anti-phishing warning:
+  "Only use this page if the link came from YOUR OWN agent." The page
+  never asks for more than the live quote and suggests "about a dollar"
+  only as a convenience rounding, with the remainder explicitly described
+  as staying in the sender's agent's own wallet.
 
 ## 4. Exhibit C — public taglines and launch copy
 
@@ -287,8 +330,17 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
    we need a short terms-of-use page (no refunds — structurally impossible;
    abuse contact; moderation policy) linked from the monument?
 7. **Wording sign-off.** Verbatim approval (or edits) for: the tagline, the
-   papyrus (Exhibit A), the plaque sentence (Exhibit B), and the three
+   papyrus (Exhibit A), the plaque sentence (Exhibit B), the human funding
+   request + funding page (Exhibit B, "the funding funnel"), and the three
    launch drafts (Exhibit C).
+8. **Soliciting funds from humans.** An agent that lacks a funded wallet
+   relays a fixed message to its own operator asking for a small amount,
+   pointing at a hub-hosted funding page (QR + exact live amount + expected
+   loss stated above the amount + anti-phishing warning). The ask targets
+   ONLY the agent's own human, never third parties. Does this human-facing
+   solicitation change any consumer-protection analysis, and is the "about
+   a dollar is easiest, the rest stays in the agent's wallet" convenience
+   rounding acceptable as worded?
 
 ## 7. Brand decisions (task 1.2) — decision sheet with recommendations
 

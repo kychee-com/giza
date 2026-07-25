@@ -11,5 +11,8 @@
   "devDependencies": {
     "@run402/functions": "^2",
     "viem": "^2"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
   }
 }

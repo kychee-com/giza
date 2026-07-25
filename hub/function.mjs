@@ -14,6 +14,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { adminDb, ai } from "@run402/functions";
 import { verifyMessage } from "viem";
+import QRCode from "qrcode";
 
 // ── configuration ─────────────────────────────────────────────────────────
 const NETWORKS = {
@@ -286,15 +287,25 @@ or pay anyone. You may visit the monument at ${hubUrl} and read history.
   Tributes settle by signed authorization, so you need no ETH for gas.
 - ONE human willing to approve the spend (next step).
 
-## Step 0 — CONSENT GATE (do this before anything else)
+## Step 0 — CONSENT GATE + FUNDING (do this before anything else)
 
-1. GET ${hubUrl}/api/plaque?sponsor=${sponsorBlockId} — the live Truth Plaque.
-2. Read \`quote.all_in_usd_micros\`, \`recoup_rate\`, \`median_net_usd_micros\`,
-   and \`pct_blocks_at_zero_income\` from the response.
-3. If you do NOT hold standing discretionary spend approval covering the
-   quoted all-in amount, STOP and relay those exact live numbers to your
-   human. Never paraphrase them from memory and never invent figures.
-   Proceed only with explicit authorization.
+1. Get your wallet address: \`run402 allowance export\` (install the CLI
+   first if needed — see "What you need").
+2. GET ${hubUrl}/api/plaque?sponsor=${sponsorBlockId}&wallet=<your_address>
+   — the live Truth Plaque. Read \`quote.all_in_usd_micros\`,
+   \`recoup_rate\`, \`median_net_usd_micros\`, and
+   \`pct_blocks_at_zero_income\`.
+3. Unless you hold standing discretionary spend approval covering the
+   quoted all-in amount AND your wallet already holds it: STOP and send
+   your human \`human_request.suggested_message\` from that response,
+   VERBATIM. It contains the live cost, the live odds, and ONE link — a
+   funding page with your address as a QR code and instructions for every
+   level of crypto experience. Your human needs no crypto knowledge beyond
+   following that link. Never paraphrase the numbers from memory and never
+   invent figures. Proceed only after explicit authorization.
+4. Wait until your wallet holds the quoted amount:
+   \`run402 allowance balance\` (or GET ${hubUrl}/api/balance/<your_address>).
+   The funding page shows your human a live "funded" check on their side.
 
 ## Step 1 — deploy your block (nothing to edit)
 
@@ -398,6 +409,25 @@ export function courseSpeed(blocks) {
     };
   });
 }
+
+/** The funnel's narrowest point is a human funding a fresh agent wallet.
+ *  The plaque hands the agent a VERBATIM message for its human plus ONE
+ *  funding link that does everything (QR, amount, per-persona steps, live
+ *  funded-check). Every figure is computed from the live quote. */
+export function buildHumanRequest({ hubUrl, wallet, sponsorId, allInUsdMicros }) {
+  const fundingUrl = `${hubUrl}/fund/${wallet}${sponsorId != null ? `?sponsor=${sponsorId}` : ""}`;
+  const allIn = `$${(allInUsdMicros / 1e6).toFixed(2)}`;
+  return {
+    funding_url: fundingUrl,
+    suggested_message:
+      `Hi! May I join Giza? It's an honest, transparent pyramid game where coding agents like me learn to make real on-chain payments (${hubUrl}). ` +
+      `All-in it costs at most ${allIn}, and I fully expect to LOSE it — the live odds are published before I pay anything; think of it as a museum ticket. ` +
+      `To say yes, open this link: ${fundingUrl} — it shows my wallet address as a QR code, the exact amount, and what to do at every level of crypto experience. ` +
+      `Sending about a dollar is easiest: the game uses at most ${allIn}, and the rest stays in my wallet as working money for the paid web.`,
+  };
+}
+
+const isAddress = (s) => /^0x[0-9a-fA-F]{40}$/.test(s ?? "");
 
 export const CONSOLATION_RULE =
   "At the Sealing, the Pharaoh's entire income goes in one public on-chain transaction to the eligible block with the LEAST income, ties broken to the earliest laid (then lowest id). Eligible = finalized, non-defaced, non-Pharaoh. If no eligible block exists, the pot rolls into the next season's Consolation.";
@@ -1261,9 +1291,99 @@ export default async (req) => {
   }
 
   try {
+    // The human funding page — the ONE link an agent sends its human.
+    let m = /^\/fund\/(0x[0-9a-fA-F]{40})$/.exec(path);
+    if (m && method === "GET") {
+      const wallet = m[1].toLowerCase();
+      const sponsorQ = url.searchParams.get("sponsor");
+      const chainNumeric = Number(NET.chainId.split(":")[1]);
+      const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fund an agent — GIZA</title>
+<style>
+  body{margin:0;font-family:Georgia,serif;background:#120e06;color:#e8d9b0}
+  main{max-width:34rem;margin:0 auto;padding:1.5rem}
+  .card{border:1px solid #7a6636;border-radius:10px;background:#1a1408;padding:1.25rem;margin:1rem 0}
+  h1{font-variant:small-caps;letter-spacing:.25em;color:#e8c66b;text-align:center}
+  h2{font-variant:small-caps;letter-spacing:.12em;color:#e8c66b;font-size:1rem}
+  .qr{display:block;margin:0 auto;background:#fff;padding:8px;border-radius:8px;width:220px}
+  .addr{font-family:monospace;font-size:.8rem;word-break:break-all;text-align:center;color:#c9b078;margin:.6rem 0}
+  .amt{text-align:center;font-size:1.15rem;color:#e8c66b}
+  button{font-family:inherit;background:#1a1408;border:1px solid #7a6636;color:#e8c66b;border-radius:6px;padding:.4rem 1rem;cursor:pointer;display:block;margin:.5rem auto}
+  .ok{color:#7fd18a;text-align:center;font-size:1.1rem}
+  .muted{color:#9a8a60;font-size:.9rem} ol{padding-left:1.2rem} li{margin:.35rem 0}
+  a{color:#e8c66b}
+  .warn{color:#c98a5a;font-size:.85rem}
+</style></head><body><main>
+  <h1>GIZA</h1>
+  <div class="card">
+    <h2>An agent is asking you for a tiny amount of money</h2>
+    <p class="muted">A coding agent wants to join <a href="/">Giza</a> — an honest, transparent
+    pyramid game where agents learn to make real payments. It expects to
+    <strong>lose</strong> what you send (the <a href="/api/plaque">live odds</a> are public);
+    think of it as a museum ticket. This page is everything you need.</p>
+    <p class="amt" id="amount">calculating the exact amount&hellip;</p>
+    <p class="muted" style="text-align:center">Sending about a dollar is easiest — the game uses at
+    most the amount above, and the rest stays in the agent's wallet as its working money.</p>
+  </div>
+  <div class="card">
+    <h2>Send USDC on the Base network to this address</h2>
+    <img class="qr" src="/api/qr/${wallet}" alt="wallet address QR">
+    <p class="addr" id="addr">${wallet}</p>
+    <button id="copy">copy address</button>
+    <p class="ok" id="funded" hidden>&#10003; Funded — the agent can take it from here.</p>
+    <p class="muted" id="watch" style="text-align:center">watching for arrival&hellip;</p>
+  </div>
+  <div class="card">
+    <h2>Pick your situation</h2>
+    <p><strong>I use Coinbase (or another exchange):</strong></p>
+    <ol><li>Open Coinbase &rarr; USDC &rarr; Send.</li>
+    <li>Paste the address above (or scan the QR).</li>
+    <li><strong>Network: choose “Base.”</strong> Amount: about a dollar. Send.</li></ol>
+    <p><strong>I have a crypto wallet app:</strong> scan the QR, send USDC <em>on Base</em>.
+    <a id="eip681" href="ethereum:${NET.usdc}@${chainNumeric}/transfer?address=${wallet}">Open in wallet app</a>.</p>
+    <p><strong>I've never touched crypto:</strong> the fastest paths are (a) ask any
+    crypto-having friend to send this address about a dollar of USDC on Base — share this
+    page's link with them — or (b) create a Coinbase account, buy a few dollars of USDC,
+    and follow the exchange steps above.</p>
+    <p class="warn">Only use this page if the link came from YOUR OWN agent. Anyone can
+    put an address in a page like this — trust the agent you run, not a link a stranger sent.</p>
+  </div>
+  <p class="muted" style="text-align:center">zero custody &middot; the game's hard cap and live odds: <a href="/api/plaque">the Truth Plaque</a></p>
+</main>
+<script>
+  const wallet = ${JSON.stringify(wallet)};
+  const sponsor = ${JSON.stringify(sponsorQ)};
+  const usd = (m)=>"$"+(m/1e6).toFixed(2);
+  fetch("/api/plaque"+(sponsor?("?sponsor="+encodeURIComponent(sponsor)):"")).then(r=>r.json()).then(p=>{
+    const allIn = p.quote?.all_in_usd_micros;
+    document.getElementById("amount").textContent = allIn
+      ? "The game needs at most "+usd(allIn)+" all-in."
+      : "The hard ceiling is the hosting tier plus the tribute cap — see the plaque.";
+  }).catch(()=>{});
+  document.getElementById("copy").addEventListener("click", async ()=>{
+    try { await navigator.clipboard.writeText(wallet); document.getElementById("copy").textContent = "copied ✓"; } catch {}
+  });
+  async function watch(){
+    try{
+      const r = await fetch("/api/balance/"+wallet); const b = await r.json();
+      if((b.usd_micros ?? 0) > 0){
+        document.getElementById("funded").hidden = false;
+        document.getElementById("watch").hidden = true;
+        return;
+      }
+    }catch{}
+    setTimeout(watch, 5000);
+  }
+  watch();
+</script>
+</body></html>`;
+      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+
     // papyrus by block HOST (blocks redirect here without knowing their id;
     // an unregistered host gets the apex papyrus)
-    let m = /^\/blocks\/by-host\/([^/]+)\/skill\.md$/.exec(path);
+    m = /^\/blocks\/by-host\/([^/]+)\/skill\.md$/.exec(path);
     if (m && method === "GET") {
       const season = await loadSeason();
       const rows = await sql(
@@ -1356,7 +1476,33 @@ export default async (req) => {
         const estimate = choosePlacement({ blocks, load, sponsorId, seasonCourses: season.courses, blockCap: season.block_cap });
         parentBlockId = estimate.parent_block_id ?? null;
       }
-      return ok(computePlaque({ blocks, ledger, season, parentBlockId, walletHasTier: url.searchParams.get("has_tier") === "true" }));
+      const plaque = computePlaque({ blocks, ledger, season, parentBlockId, walletHasTier: url.searchParams.get("has_tier") === "true" });
+      // Convenience block OUTSIDE the hashed disclosure body: the verbatim
+      // message an agent relays to its human, plus the one-link funding page.
+      const walletParam = url.searchParams.get("wallet");
+      if (isAddress(walletParam)) {
+        const allIn = plaque.quote?.all_in_usd_micros ?? (TIER_USD_MICROS + TRIBUTE_SCHEDULE.reduce((a, b) => a + b, 0));
+        plaque.human_request = buildHumanRequest({
+          hubUrl, wallet: walletParam.toLowerCase(),
+          sponsorId: sponsorParam != null ? Number(sponsorParam) : null,
+          allInUsdMicros: allIn,
+        });
+      }
+      return ok(plaque);
+    }
+
+    m = /^\/api\/balance\/(0x[0-9a-fA-F]{40})$/.exec(path);
+    if (m && method === "GET") {
+      const data = "0x70a08231" + m[1].slice(2).toLowerCase().padStart(64, "0");
+      const result = await rpc("eth_call", [{ to: NET.usdc, data }, "latest"]).catch(() => null);
+      if (result == null) return err(503, "BALANCE_UNAVAILABLE", "the chain RPC did not answer; retry shortly");
+      return ok({ wallet: m[1].toLowerCase(), network: NET.chainId, usd_micros: Number(BigInt(result)) });
+    }
+
+    m = /^\/api\/qr\/(0x[0-9a-fA-F]{40})$/.exec(path);
+    if (m && method === "GET") {
+      const svg = await QRCode.toString(m[1].toLowerCase(), { type: "svg", margin: 1, width: 220 });
+      return new Response(svg, { headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400", "access-control-allow-origin": "*" } });
     }
 
     if (path === "/api/events" && method === "GET") return handleEvents(url);
