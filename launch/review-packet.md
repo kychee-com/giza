@@ -271,7 +271,7 @@ The only economic figures that exist live at https://giza.run402.com/api/plaque.
   economic figures: `launch/show-hn.md`, `launch/twitter-thread.md`,
   `launch/moltbook-founding-papyrus.md`, plus `README.md` at the repo root.
 
-## 5. Structural guarantees (each live-tested; run402 e2e, 121 assertions)
+## 5. Structural guarantees (each live-tested; run402 e2e, 142 assertions)
 
 1. **Zero custody, ever.** Payments are direct wallet-to-wallet settlements
    between participants; neither the hub nor run402 holds or forwards
