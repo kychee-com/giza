@@ -126,6 +126,8 @@
     white-space:nowrap;transform:translate(-50%,-140%);
   }
   #tip .r{color:var(--gold);letter-spacing:.1em;text-transform:uppercase;font-size:.55rem;display:block}
+  #tip .q{display:block;margin-top:.28rem;font-family:var(--serif);font-style:italic;
+    font-size:.78rem;color:var(--stone-hi);max-width:20rem;white-space:normal}
 
   /* ── the stela drawer: the payoff ───────────────────────────────── */
   .drawer{
@@ -241,13 +243,40 @@
   }
 
   /* ── responsive ─────────────────────────────────────────────────── */
+  /* the mobile sheet handle — only ever shown on narrow screens */
+  .handle{display:none}
+
   @media (max-width:900px){
+    /* The rail is a SHEET. Collapsed by default so the monument owns the
+       screen; the ladder is one tap away. */
     .rail{
-      top:auto;bottom:0;left:0;right:0;width:100%;max-height:47vh;padding:1rem 1rem 4.6rem;
-      background:linear-gradient(0deg,rgba(7,10,24,.97) 72%,rgba(7,10,24,0));
+      top:auto;bottom:0;left:0;right:0;width:100%;padding:.5rem 1rem 4.2rem;
+      max-height:30vh;gap:1rem;
+      background:linear-gradient(0deg,rgba(7,10,24,.97) 78%,rgba(7,10,24,0));
+      transition:max-height .34s cubic-bezier(.22,.9,.28,1);
     }
-    .masthead h1{letter-spacing:.3em;text-indent:.3em}
-    .cambar{bottom:auto;top:4.4rem}
+    .rail.expanded{max-height:82vh}
+    .rail .ladder,.rail .footnote{display:none}
+    .rail.expanded .ladder,.rail.expanded .footnote{display:flex}
+    .rail.expanded .footnote{display:block}
+    .handle{
+      display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%;
+      font-family:var(--mono);font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;
+      color:var(--faint);padding:.35rem 0 .1rem;
+    }
+    .handle::before{content:"";width:2rem;height:2px;border-radius:2px;background:var(--hair)}
+    .handle::after{content:"";width:2rem;height:2px;border-radius:2px;background:var(--hair)}
+    .thesis p{font-size:.78rem}
+    .masthead{padding:.7rem .6rem .3rem}
+    .masthead h1{font-size:1.5rem;letter-spacing:.26em;text-indent:.26em}
+    .masthead .sub{font-size:.52rem;letter-spacing:.1em}
+    /* the bar must never run off the screen */
+    .cambar{
+      bottom:auto;top:3.6rem;max-width:calc(100vw - 1rem);overflow-x:auto;
+      scrollbar-width:none;
+    }
+    .cambar::-webkit-scrollbar{display:none}
+    .cambar button{padding:.4rem .52rem;font-size:.55rem;letter-spacing:.1em;flex:none}
     .hint{display:none}
     .drawer{width:100%;top:auto;height:82vh;transform:translateY(102%)}
     .drawer.open{transform:translateY(0)}
@@ -266,7 +295,8 @@
   </div>
 </div>
 
-<aside class="rail">
+<aside class="rail" id="rail">
+  <button class="handle" id="railHandle" type="button" aria-expanded="false">the ladder of standing</button>
   <div class="thesis">
     <h2>The record is the reward.</h2>
     <p>Standing on this monument is earned by <em>agents brought into the paid web</em> — a count of deeds, not a sum of money. Every honour is computed from the public ledger by a fixed, published rule that anyone can recompute. <em>Nothing here is drawn, raffled, or awarded at anyone's discretion.</em></p>
@@ -294,7 +324,7 @@
   <button data-view="ground">Ground</button>
   <button data-view="spin" aria-pressed="false">Orbit</button>
 </div>
-<div class="hint">drag to orbit · scroll to zoom · shift-drag to pan · click a stone</div>
+<div class="hint">drag to orbit · zoom in until the stones show their inscriptions · click a stone</div>
 
 <div id="tip"></div>
 
@@ -492,7 +522,7 @@ function resize(){
   // framed for a 1440px desktop and it overflows on every side. A phone
   // also wants a LARGER fill fraction — no side panels are eating width.
   FOV = Math.max(280, Math.min(1150, W <= 900
-    ? Math.min(W * 1.30, H * 0.62)
+    ? Math.min(W * 1.45, H * 0.72)
     : Math.min(W * 0.70, H * 1.15)));
   cvs.width = W * DPR; cvs.height = H * DPR;
   cvs.style.width = W + "px"; cvs.style.height = H + "px";
@@ -536,7 +566,10 @@ function stoneBox(b){
 
 /* six faces, outward-wound; we backface-cull by projected winding */
 const FACE_DEFS = [
-  { n:[0,1,0],  v:[[-1,1,-1],[1,1,-1],[1,1,1],[-1,1,1]] },   // top
+  // Top face: wound so e1×e2 points +y. Reversing this order flips the
+  // normal DOWN and the backface cull silently eats every stone's top —
+  // the monument then renders as bare side walls with gaps between them.
+  { n:[0,1,0],  v:[[-1,1,-1],[-1,1,1],[1,1,1],[1,1,-1]] },   // top
   { n:[0,0,-1], v:[[-1,0,-1],[-1,1,-1],[1,1,-1],[1,0,-1]] },
   { n:[0,0,1],  v:[[1,0,1],[1,1,1],[-1,1,1],[-1,0,1]] },
   { n:[-1,0,0], v:[[-1,0,1],[-1,1,1],[-1,1,-1],[-1,0,-1]] },
@@ -552,8 +585,8 @@ function material(b){
     case 4: return { top:"#5c86d6", side:"#2f4a86", edge:"#16234a", glow:0.55, key:"#ffd27a" };
     case 3: return { top:"#f0c979", side:"#c9a04e", edge:"#75551f", glow:0.24, key:"#ffd27a" };
     case 2: return { top:"#6fb8a2", side:"#3f8f7a", edge:"#1d4c40", glow:0.10, key:"#7fd6bd" };
-    case 1: return { top:`hsl(${hue} 42% 60%)`, side:`hsl(${hue} 38% 41%)`, edge:`hsl(${hue} 34% 22%)`, glow:0, key:"#dcb87e" };
-    default:return { top:`hsl(${hue} 26% 51%)`, side:`hsl(${hue} 24% 35%)`, edge:`hsl(${hue} 22% 19%)`, glow:0, key:"#a8834f" };
+    case 1: return { top:`hsl(${hue} 40% 54%)`, side:`hsl(${hue} 36% 37%)`, edge:`hsl(${hue} 32% 20%)`, glow:0, key:"#dcb87e" };
+    default:return { top:`hsl(${hue} 25% 43%)`, side:`hsl(${hue} 23% 29%)`, edge:`hsl(${hue} 21% 16%)`, glow:0, key:"#a8834f" };
   }
 }
 /* ── starfield, baked once ───────────────────────────────────────────── */
@@ -648,10 +681,12 @@ function drawFaces(faces){
     ctx.closePath();
     ctx.fillStyle = f.top ? f.mat.top : f.mat.side;
     ctx.fill();
-    // light veil / shadow veil — cheap per-face lambert without colour parsing
-    const k = (f.top ? 0.28 : 0) + f.lam * 0.36;
-    ctx.fillStyle = `rgba(255,236,196,${(k * 0.5).toFixed(3)})`; ctx.fill();
-    ctx.fillStyle = `rgba(8,6,20,${(0.38 - k * 0.36).toFixed(3)})`; ctx.fill();
+    // Light veil / shadow veil — a cheap per-face lambert that needs no
+    // colour parsing. Keep the light veil low or it bleaches the material
+    // ladder (the inlays) into uniform cream on every top face.
+    const k = (f.top ? 0.16 : 0) + f.lam * 0.3;
+    ctx.fillStyle = `rgba(255,236,196,${(k * 0.4).toFixed(3)})`; ctx.fill();
+    ctx.fillStyle = `rgba(8,6,20,${(0.4 - k * 0.4).toFixed(3)})`; ctx.fill();
 
     if (f.inPulse){
       const a = 0.28 + 0.22 * Math.sin(tNow / 220);
@@ -668,7 +703,54 @@ function drawFaces(faces){
                       : f.b.rank === 3 ? "rgba(255,236,180,.5)" : "rgba(127,214,189,.5)";
       ctx.lineWidth = f.b.rank >= 4 ? 1.5 : 1; ctx.stroke();
     }
+    if (f.top) drawCarvedInscription(f);
   }
+}
+
+/* The inscription is the whole point of owning a stone, so it belongs ON the
+   stone — not only in the drawer. Text is mapped onto the projected top face,
+   so it lies in the masonry and shears with the camera. It appears only once
+   a face is big enough to read: zooming in IS the reveal. */
+function drawCarvedInscription(f){
+  const text = f.b.inscription;
+  if (!text) return;
+  const p = f.pts;
+  // Choose the corner AND edge order that maps the unit square onto this
+  // face without mirroring. Checking only "does x point right" is not
+  // enough — a negative determinant renders every glyph back to front.
+  let best = null, bestScore = -Infinity;
+  for (let r = 0; r < 4; r++){
+    const a = p[r];
+    for (const [i, j] of [[(r + 1) % 4, (r + 3) % 4], [(r + 3) % 4, (r + 1) % 4]]){
+      const ex = { x: p[i].x - a.x, y: p[i].y - a.y };
+      const ey = { x: p[j].x - a.x, y: p[j].y - a.y };
+      if (ex.x * ey.y - ex.y * ey.x <= 0) continue;      // mirrored — reject
+      const score = ex.x - Math.abs(ex.y) * 0.5 + ey.y * 0.5;
+      if (score > bestScore){ bestScore = score; best = { a, ex, ey }; }
+    }
+  }
+  if (!best) return;
+  const { a, ex, ey } = best;
+  if (Math.hypot(ex.x, ex.y) < 58 || Math.hypot(ey.x, ey.y) < 30) return;
+
+  ctx.save();
+  ctx.transform(ex.x, ex.y, ey.x, ey.y, a.x, a.y);   // unit square → this face
+  ctx.scale(0.01, 0.01);                              // work on a 0–100 grid
+  ctx.font = "600 10px ui-monospace, Menlo, Consolas, monospace";
+  ctx.textAlign = "center";
+  const lines = []; let cur = "";
+  for (const w of text.split(" ")){
+    const t = cur ? cur + " " + w : w;
+    if (cur && ctx.measureText(t).width > 84){ lines.push(cur); cur = w; } else cur = t;
+  }
+  if (cur) lines.push(cur);
+  const show = lines.slice(0, 4), lh = 12, y0 = 50 - (show.length - 1) * lh / 2 + 3.5;
+  for (let i = 0; i < show.length; i++){
+    const y = y0 + i * lh;
+    ctx.fillStyle = "rgba(20,10,0,.6)";        ctx.fillText(show[i], 50, y);
+    ctx.fillStyle = "rgba(255,242,208,.34)";   ctx.fillText(show[i], 50, y + 1);
+  }
+  ctx.restore();
 }
 
 function drawGlow(){
@@ -745,7 +827,7 @@ cvs.addEventListener("pointermove", (e) => {
     want.tz = drag.tz - (dx * -s + dy * c * 0.5) * k;
   } else {
     want.yaw = drag.yaw + dx * 0.0072;
-    want.pitch = Math.max(0.02, Math.min(1.42, drag.pitch + dy * 0.0055));
+    want.pitch = Math.max(0.02, Math.min(1.53, drag.pitch + dy * 0.0055)); // up to a true plan view
     spin = false; syncSpinBtn();
   }
 });
@@ -803,7 +885,9 @@ function hoverAt(pt){
   if (!b){ tip.style.opacity = 0; return; }
   tip.style.opacity = 1;
   tip.style.left = pt.x + "px"; tip.style.top = pt.y + "px";
-  tip.innerHTML = `<span class="r">${RANKS[b.rank].name}</span>Stone #${b.id} · ${b.dynasty} · brought ${b.dynastySize}`;
+  tip.innerHTML = `<span class="r">${RANKS[b.rank].name}</span>` +
+    `Stone #${b.id} · ${b.dynasty} · brought ${b.dynastySize}` +
+    (b.inscription ? `<span class="q">“${b.inscription.replace(/</g, "&lt;")}”</span>` : "");
 }
 function selectAt(pt){
   const b = hitTest(pt);
@@ -844,7 +928,7 @@ RANKS.forEach((r, i) => {
 const VIEWS = {
   iso:    { yaw:-0.62, pitch:0.4,  dist:33, ty:3.5 },
   face:   { yaw:0,     pitch:0.14, dist:30, ty:4.2 },
-  apex:   { yaw:-0.3,  pitch:1.2,  dist:30, ty:2.0 },
+  apex:   { yaw:-0.3,  pitch:1.5,  dist:28, ty:2.0 },   // straight down: the plan
   ground: { yaw:-1.15, pitch:0.05, dist:23, ty:2.2 },
 };
 const cambar = document.getElementById("cambar");
@@ -941,6 +1025,14 @@ function openStela(b, fly){
     spin = false; syncSpinBtn();
   }
 }
+
+/* the mobile sheet: collapsed by default so the monument owns the screen */
+const rail = document.getElementById("rail"), railHandle = document.getElementById("railHandle");
+railHandle.addEventListener("click", () => {
+  const open = rail.classList.toggle("expanded");
+  railHandle.setAttribute("aria-expanded", String(open));
+  railHandle.textContent = open ? "hide the ladder" : "the ladder of standing";
+});
 
 /* open on the apex so the first thing anyone sees is the best plaque */
 openStela(apex);
